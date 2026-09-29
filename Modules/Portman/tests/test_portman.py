@@ -76,6 +76,17 @@ class HTTP(http.server.BaseHTTPRequestHandler):
 
 
 class SpecTests(unittest.TestCase):
+    def test_control_server_starts_without_dns(self):
+        from unittest.mock import patch
+        from portman.service import Server, Handler
+        with patch("socket.getfqdn", side_effect=AssertionError("Local API must not resolve DNS")):
+            server = Server(("127.0.0.1", 0), Handler)
+            try:
+                self.assertEqual(server.server_name, "127.0.0.1")
+                self.assertGreater(server.server_port, 0)
+            finally:
+                server.server_close()
+
     def test_ipv6_hostname_and_invalid_input(self):
         self.assertEqual(endpoint("[::1]:8000"), ("::1", 8000))
         self.assertEqual(endpoint("localhost:8000"), ("localhost", 8000))

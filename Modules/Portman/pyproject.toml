@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "portman-local"
-version = "1.0.0"
+version = "1.0.1"
 description = "Local GUI and CLI for owned TCP and SSH port forwards"
 requires-python = ">=3.9"
 dependencies = []

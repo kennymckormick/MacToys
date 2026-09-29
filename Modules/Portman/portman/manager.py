@@ -71,15 +71,18 @@ class Mapping:
         self.log("Stopped")
 
     async def cleanup(self):
-        if self.server:
-            self.server.close()
-            await self.server.wait_closed()
-            self.server = None
+        server, self.server = self.server, None
+        if server:
+            server.close()
         clients = list(self.clients)
         for task in clients:
             task.cancel()
         if clients:
             await asyncio.gather(*clients, return_exceptions=True)
+        # Python 3.12+ waits for accepted connections too. Close their streams
+        # before waiting for the listening server, or stop can deadlock.
+        if server:
+            await server.wait_closed()
         if self.proc:
             proc, self.proc = self.proc, None
             if proc.stdin:

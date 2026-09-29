@@ -68,3 +68,11 @@ Release 构建通过；真实弹窗检查了千万级数字、单词切换和年
 - Shell、Python、前端 JavaScript 语法检查通过。
 - 将受版本控制的源码复制到全新目录，使用 ad-hoc 签名完成完整构建；不依赖原构建缓存、个人证书或外部 Portman 源码目录。
 - [内存 / CPU 检查方法、数据与限制](performance.md)。
+
+## 0.2.4 Python 兼容性
+
+首次 GitHub macOS 15 / Python 3.14 检查暴露后台启动超时。本机 Python 3.14 进一步复现：仍有活动 TCP 连接时，停止映射会等待客户端关闭，而客户端清理又被放在服务器关闭之后。Python 3.12+ 的 `Server.wait_closed()` 等待活动连接释放，因此修正为先停止接收新连接、清理客户端流，再等待服务器完全关闭。
+
+本地管理 HTTP 服务仅绑定数字 loopback 地址，启动时移除了无必要的反向 DNS 查询，并增加解析器不可用时仍可启动的回归检查。Python 3.9.6 和 3.14.2 各自运行完整的 15 项测试均通过，包含真实 SSH 双向转发与连接清理。
+
+语义依据：[Python asyncio Server.wait_closed](https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.Server.wait_closed)。

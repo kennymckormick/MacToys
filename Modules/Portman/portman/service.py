@@ -9,6 +9,7 @@ import signal
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import TCPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -20,6 +21,12 @@ from .manager import Manager, ssh_aliases
 class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = False
+
+    def server_bind(self):
+        # This API is bound to a numeric loopback address. HTTPServer's default
+        # reverse-DNS lookup can block startup when the resolver is unavailable.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 class Handler(BaseHTTPRequestHandler):
