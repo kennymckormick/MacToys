@@ -2,7 +2,7 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-Input statistics, port forwarding, screen color picking, and mouse wheel reversal for macOS 14+.
+Input statistics, port forwarding, screen color picking, mouse wheel reversal, and sleep prevention for macOS 14+.
 
 ## InputStats
 
@@ -30,6 +30,12 @@ Input statistics, port forwarding, screen color picking, and mouse wheel reversa
 - Reverse vertical and horizontal mouse wheel scrolling independently.
 - Keep trackpad scrolling and momentum unchanged. Continuous devices, including Magic Mouse, retain their original direction.
 - Toggle from the menu bar; keep the setting when the window closes.
+
+## Keep Awake
+
+- Prevent idle sleep until switched off, or for 15 minutes to 4 hours.
+- Optionally keep the display on while the Mac stays awake.
+- Toggle from the menu bar; a coffee cup shows when active. Sessions end when MacToys quits.
 
 [Build from source](docs/building.md) · [Usage notes (中文)](docs/usage.zh-CN.md)
 

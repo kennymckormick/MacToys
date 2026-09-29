@@ -2,10 +2,10 @@ import SwiftUI
 
 final class ToolsModel: ObservableObject {
     enum Tool: String, CaseIterable, Identifiable {
-        case input = "输入统计", ports = "端口转发", colors = "屏幕取色", scroll = "滚轮反转", settings = "设置"
+        case input = "输入统计", ports = "端口转发", colors = "屏幕取色", scroll = "滚轮反转", awake = "防止休眠", settings = "设置"
         var id: String { rawValue }
         var symbol: String {
-            switch self { case .input: return "keyboard"; case .ports: return "arrow.left.arrow.right"; case .colors: return "eyedropper"; case .scroll: return "computermouse"; case .settings: return "gearshape" }
+            switch self { case .input: return "keyboard"; case .ports: return "arrow.left.arrow.right"; case .colors: return "eyedropper"; case .scroll: return "computermouse"; case .awake: return "cup.and.saucer"; case .settings: return "gearshape" }
         }
     }
     @Published var selection: Tool = .input
@@ -16,6 +16,7 @@ struct ToolsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var colors: ColorPickerStore
     @ObservedObject var scroll: ScrollReversalStore
+    @ObservedObject var awake: KeepAwakeStore
     var onPickColor: () -> Void
     @StateObject private var stats = StatsStore()
     var body: some View {
@@ -31,6 +32,7 @@ struct ToolsView: View {
                     row(.ports, subtitle: "Portman")
                     row(.colors, subtitle: "Color Picker")
                     row(.scroll, subtitle: "Scroll Reversal")
+                    row(.awake, subtitle: "Keep Awake")
                 }
                 Spacer()
                 row(.settings, subtitle: "偏好与数据")
@@ -46,6 +48,7 @@ struct ToolsView: View {
                     case .ports: PortmanView()
                     case .colors: ColorPickerView(store: colors, onPick: onPickColor)
                     case .scroll: ScrollReversalView(store: scroll)
+                    case .awake: KeepAwakeView(store: awake)
                     case .settings: SettingsView(settings: settings)
                     }
                 } else { Color.clear }

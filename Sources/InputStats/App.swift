@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import ApplicationServices
+import Combine
 import Darwin
 
 @main
@@ -31,6 +32,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
     private let model = ToolsModel()
     private let colors = ColorPickerStore()
     private let scroll = ScrollReversalStore()
+    private let awake = KeepAwakeStore()
+    private var awakeStateToken: AnyCancellable?
     private var lockFD: Int32 = -1
     private var ownsLock = false
     private var reopenObserver: NSObjectProtocol?
@@ -51,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         // Never automatically request/reset TCC. Reuse the existing signed app identity.
         InputMonitor.shared.start()
         scroll.start()
+        awake.start()
         for number in [SIGTERM, SIGINT] {
             signal(number, SIG_IGN)
             let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
@@ -62,9 +66,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: "MacToys 工具箱")
-            button.toolTip = "MacToys · 输入统计、端口转发、屏幕取色与滚轮反转"
             button.action = #selector(statusClicked); button.target = self
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        }
+        awakeStateToken = awake.$enabled.removeDuplicates().sink { [weak self] enabled in
+            guard let button = self?.statusItem.button else { return }
+            button.image = NSImage(systemSymbolName: enabled ? "cup.and.saucer.fill" : "square.grid.2x2",
+                                   accessibilityDescription: enabled ? "MacToys · 防止休眠已开启" : "MacToys 工具箱")
+            button.toolTip = enabled ? "MacToys · 防止休眠已开启（右键可关闭）" : "MacToys · 输入统计、端口转发、屏幕取色、滚轮反转与防止休眠"
         }
         popover.behavior = .transient; popover.delegate = self
         installMenu()
@@ -77,7 +86,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
                 "colorShortcut": colors.shortcut.label, "colorShortcutError": colors.shortcutError ?? "",
                 "scrollReversalEnabled": scroll.enabled, "scrollReversalRunning": scroll.running,
                 "scrollReverseVertical": scroll.reverseVertical, "scrollReverseHorizontal": scroll.reverseHorizontal,
-                "scrollReversalError": scroll.issue ?? ""]
+                "scrollReversalError": scroll.issue ?? "",
+                "awakeEnabled": awake.enabled, "awakeKeepDisplayAwake": awake.keepDisplayAwake,
+                "awakeDurationMinutes": awake.duration.rawValue, "awakeEndsAt": awake.endsAt?.ISO8601Format() ?? "",
+                "awakeError": awake.issue ?? ""]
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 FileHandle.standardOutput.write(data); FileHandle.standardOutput.write(Data("\n".utf8))
             }
@@ -130,6 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         let pickItem = toolsMenu.addItem(withTitle: "拾取屏幕颜色…", action: #selector(pickColor), keyEquivalent: "p")
         pickItem.keyEquivalentModifierMask = [.command, .shift]; pickItem.target = self
         toolsMenu.addItem(withTitle: "滚轮反转…", action: #selector(openScroll), keyEquivalent: "").target = self
+        toolsMenu.addItem(withTitle: "防止休眠…", action: #selector(openAwake), keyEquivalent: "").target = self
         let windowItem = NSMenuItem(title: "窗口", action: nil, keyEquivalent: ""); menu.addItem(windowItem)
         let windowMenu = NSMenu(title: "窗口"); windowItem.submenu = windowMenu
         windowMenu.addItem(withTitle: "最小化", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
@@ -171,6 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         popoverStore?.deactivate(); popoverStore = nil; popover.contentViewController = nil
     }
     private func showMenu() {
+        awake.expireIfNeeded()
         let menu = NSMenu(); menu.delegate = self
         menu.addItem(withTitle: "打开 MacToys", action: #selector(showTools), keyEquivalent: "").target = self
         menu.addItem(withTitle: "端口转发", action: #selector(openPorts), keyEquivalent: "").target = self
@@ -179,6 +193,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         let scrollItem = menu.addItem(withTitle: "反转鼠标滚轮", action: #selector(toggleScroll), keyEquivalent: "")
         scrollItem.target = self; scrollItem.state = scroll.enabled ? .on : .off
         menu.addItem(withTitle: "滚轮设置…", action: #selector(openScroll), keyEquivalent: "").target = self
+        let awakeItem = menu.addItem(withTitle: "防止休眠", action: #selector(toggleAwake), keyEquivalent: "")
+        awakeItem.target = self; awakeItem.state = awake.enabled ? .on : .off
+        menu.addItem(withTitle: "防休眠设置…", action: #selector(openAwake), keyEquivalent: "").target = self
         menu.addItem(withTitle: AppSettings.shared.paused ? "继续输入统计" : "暂停输入统计", action: #selector(togglePaused), keyEquivalent: "").target = self
         menu.addItem(withTitle: "设置…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(.separator())
@@ -191,6 +208,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
     @objc private func openPorts() { model.selection = .ports; showTools() }
     @objc private func openColors() { model.selection = .colors; showTools() }
     @objc private func openScroll() { model.selection = .scroll; showTools() }
+    @objc private func openAwake() { model.selection = .awake; showTools() }
+    @objc private func toggleAwake() {
+        awake.setEnabled(!awake.enabled)
+        if awake.issue != nil { openAwake() }
+    }
     @objc private func toggleScroll() {
         scroll.enabled.toggle()
         if scroll.enabled && scroll.issue != nil { openScroll() }
@@ -224,7 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
                 styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             value.title = "MacToys"
             value.contentViewController = NSHostingController(rootView: ToolsView(model: model, settings: AppSettings.shared,
-                colors: colors, scroll: scroll, onPickColor: { [weak self] in self?.pickColor() }))
+                colors: colors, scroll: scroll, awake: awake, onPickColor: { [weak self] in self?.pickColor() }))
             value.minSize = NSSize(width: 920, height: 690)
             value.isReleasedWhenClosed = false; value.delegate = self
             value.setFrameAutosaveName(isTest ? "MacToysTestWindow" : "MacToysMainWindow")
@@ -256,6 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
     func applicationWillTerminate(_ notification: Notification) {
         if ownsLock {
             scroll.stop()
+            awake.stop()
             if !isTest || ProcessInfo.processInfo.environment["INPUTSTATS_ENABLE_TEST_MONITOR"] == "1" { InputMonitor.shared.stop() }
             flock(lockFD, LOCK_UN); Darwin.close(lockFD)
         }

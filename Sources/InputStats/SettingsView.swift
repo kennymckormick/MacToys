@@ -38,7 +38,7 @@ struct SettingsView: View {
                 }
             }
             Section("MacToys") {
-                Text("输入统计、端口转发、屏幕取色与滚轮反转。关闭窗口后继续运行；退出 MacToys 会停止输入统计、取色快捷键和滚轮反转，Portman 的连接继续由后台管理。")
+                Text("输入统计、端口转发、屏幕取色、滚轮反转与防止休眠。关闭窗口后继续运行；退出 MacToys 会停止统计、快捷键、滚轮反转和防止休眠，Portman 的连接继续由后台管理。")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
