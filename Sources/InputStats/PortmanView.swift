@@ -1,0 +1,131 @@
+import SwiftUI
+import WebKit
+
+final class PortmanController: ObservableObject {
+    @Published var url: URL?
+    @Published var error: String?
+    @Published var loading = false
+    weak var webView: WKWebView?
+    private var generation = 0
+    func connect() {
+        guard !loading else { return }
+        generation += 1
+        let ticket = generation
+        loading = true; error = nil
+        DispatchQueue.global(qos: .utility).async {
+            let result = Result { try Self.discover() }
+            DispatchQueue.main.async {
+                guard self.generation == ticket else { return }
+                self.loading = false
+                switch result {
+                case .success(let url): self.url = url
+                case .failure(let error): self.error = error.localizedDescription
+                }
+            }
+        }
+    }
+    func disconnectView() { generation += 1; loading = false; webView?.stopLoading(); webView = nil; url = nil }
+    private static func discover() throws -> URL {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let candidates = [home.appendingPathComponent(".local/bin/portman").path, "/opt/homebrew/bin/portman", "/usr/local/bin/portman"]
+        let process = Process()
+        var environment = ProcessInfo.processInfo.environment
+        // Bundled Python must never write __pycache__ inside the signed app.
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        if let launcher = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
+            process.executableURL = URL(fileURLWithPath: launcher)
+            process.arguments = ["gui", "--no-open", "--json"]
+        } else if let resource = Bundle.main.resourceURL?.appendingPathComponent("Portman"), FileManager.default.fileExists(atPath: resource.path) {
+            let python = ["/Library/Developer/CommandLineTools/usr/bin/python3", "/opt/homebrew/bin/python3", "/usr/bin/python3"].first(where: { FileManager.default.isExecutableFile(atPath: $0) })
+            guard let python else { throw PortmanError.message("未找到 Python 3，请安装 Portman 的运行环境。") }
+            process.executableURL = URL(fileURLWithPath: python)
+            process.arguments = ["-m", "portman", "gui", "--no-open", "--json"]
+            environment["PYTHONPATH"] = resource.path
+        } else { throw PortmanError.message("未找到 Portman，请先安装或检查 ~/.local/bin/portman。") }
+        // Test instances explicitly use their own daemon, never live mappings.
+        if let test = environment["INPUTSTATS_TEST_HOME"] { environment["PORTMAN_HOME"] = URL(fileURLWithPath: test).appendingPathComponent("portman").path }
+        process.environment = environment
+        let pipe = Pipe()
+        process.standardOutput = pipe; process.standardError = FileHandle.nullDevice; process.standardInput = FileHandle.nullDevice
+        try process.run()
+        let timeout = DispatchWorkItem { if process.isRunning { process.terminate() } }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 15, execute: timeout)
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit(); timeout.cancel()
+        guard process.terminationStatus == 0,
+              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let value = json["url"] as? String, var parts = URLComponents(string: value),
+              parts.scheme == "http", parts.host == "127.0.0.1", let port = parts.port, (1...65535).contains(port),
+              parts.user == nil, parts.password == nil, parts.fragment?.hasPrefix("token=") == true else {
+            throw PortmanError.message("无法连接 Portman 后台。请重试，或运行 portman daemon status 查看状态。")
+        }
+        parts.queryItems = [URLQueryItem(name: "embedded", value: "1")]
+        guard let url = parts.url else { throw PortmanError.message("Portman 返回了无效地址。") }
+        return url
+    }
+    enum PortmanError: Error, LocalizedError {
+        case message(String)
+        var errorDescription: String? { if case .message(let value) = self { return value }; return nil }
+    }
+}
+
+struct PortmanView: View {
+    @StateObject private var controller = PortmanController()
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Label("Portman · 端口转发", systemImage: "arrow.left.arrow.right").font(.headline)
+                Spacer()
+                Button("SSH 主机") { controller.webView?.evaluateJavaScript("document.getElementById('nav-hosts').click()") }
+                Button("命令行") { controller.webView?.evaluateJavaScript("document.getElementById('nav-help').click()") }
+                Button { controller.url = nil; controller.connect() } label: { Image(systemName: "arrow.clockwise") }.help("重新连接")
+            }.padding(20)
+            Divider()
+            if let url = controller.url {
+                PortmanWebView(url: url, controller: controller)
+            } else if let error = controller.error {
+                ContentUnavailableView {
+                    Label("Portman 暂不可用", systemImage: "network.slash")
+                } description: { Text(error) } actions: { Button("重试") { controller.connect() } }
+            } else { Spacer(); ProgressView("正在连接本机 Portman…"); Spacer() }
+        }
+        .onAppear { controller.connect() }
+        .onDisappear { controller.disconnectView() }
+    }
+}
+
+private struct PortmanWebView: NSViewRepresentable {
+    let url: URL
+    let controller: PortmanController
+    func makeCoordinator() -> Coordinator { Coordinator(controller: controller, origin: url) }
+    func makeNSView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        let view = WKWebView(frame: .zero, configuration: configuration)
+        view.navigationDelegate = context.coordinator
+        controller.webView = view
+        view.load(URLRequest(url: url))
+        return view
+    }
+    func updateNSView(_ view: WKWebView, context: Context) {}
+    static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) {
+        view.stopLoading(); view.navigationDelegate = nil; view.loadHTMLString("", baseURL: nil)
+    }
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        let controller: PortmanController
+        let origin: URL
+        init(controller: PortmanController, origin: URL) { self.controller = controller; self.origin = origin }
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            guard let target = action.request.url else { decisionHandler(.cancel); return }
+            let same = target.scheme == origin.scheme && target.host == origin.host && target.port == origin.port
+            decisionHandler(same || target.absoluteString == "about:blank" ? .allow : .cancel)
+        }
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            if (error as NSError).code == NSURLErrorCancelled { return }
+            controller.url = nil; controller.error = "本机 Portman 页面加载失败，请重新连接。"
+        }
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            controller.url = nil; controller.error = "Portman 界面进程已退出，请重新连接。"
+        }
+    }
+}

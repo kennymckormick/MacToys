@@ -1,0 +1,23 @@
+name: Check
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build application
+        run: SIGNING_IDENTITY=- ./build.sh
+      - name: Core and storage checks
+        run: .build-mactoys/release/SelfCheck
+      - name: Color picker checks
+        run: bash scripts/check-color-picker.sh
+      - name: Portman TCP and API checks
+        working-directory: Modules/Portman
+        run: PYTHONPATH=tests python3 -m unittest -v test_portman.SpecTests test_portman.LiveTests
+      - name: Check GUI JavaScript
+        run: node --check Modules/Portman/portman/static/app.js

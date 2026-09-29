@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "portman-local"
+version = "1.0.0"
+description = "Local GUI and CLI for owned TCP and SSH port forwards"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+portman = "portman.cli:main"
+
+[tool.setuptools.package-data]
+portman = ["static/*"]
+
+[tool.setuptools.packages.find]
+include = ["portman*"]

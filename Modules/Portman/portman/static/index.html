@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Portman · 端口映射</title><link rel="icon" href="/icon.svg"><link rel="stylesheet" href="/style.css">
+  <script defer src="/app.js"></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="Portman 首页"><img src="/icon.svg" alt=""><span>portman<span class="brand-dot">.</span></span></a>
+    <div class="workspace"><span class="tiny-label">WORKSPACE</span><strong>本机工作空间</strong><span class="muted">Local connections, together.</span></div>
+    <nav><button class="nav-item selected" id="nav-all"><span>⇄</span> 端口映射 <span class="nav-count" id="nav-count">0</span></button><button class="nav-item" id="nav-hosts"><span>▧</span> SSH 主机</button><button class="nav-item" id="nav-help"><span>⌘</span> 命令行速查</button></nav>
+    <div class="sidebar-bottom"><div class="connection-state"><i id="connection-dot"></i><span id="connection-text">正在连接本机</span></div><span class="muted">Portman 1.0 · TCP / SSH</span></div>
+  </aside>
+  <main>
+    <header class="topbar"><div class="breadcrumb">工作空间 <span>/</span> <strong>端口映射</strong></div><span class="local-tag"><i></i> LOCAL</span></header>
+    <section class="content">
+      <div class="page-heading"><div><div class="eyebrow">CONNECTION MANAGER</div><h1>让连接，各就各位。</h1><p>在一个地方管理本地转发与 SSH 隧道。</p></div><button class="primary new-mapping"><span>＋</span> 新建映射</button></div>
+      <div class="summary"><div class="stat"><span>全部映射</span><strong id="total">0</strong><small>已保存的连接</small></div><div class="stat"><span><i class="dot green"></i> 运行中</span><strong id="running">0</strong><small>转发已建立</small></div><div class="stat"><span><i class="dot amber"></i> 需要关注</span><strong id="attention">0</strong><small>连接中或等待重试</small></div><div class="stat"><span><i class="dot gray"></i> 已停止</span><strong id="stopped">0</strong><small>随时可以重新启动</small></div></div>
+      <div class="list-toolbar"><div class="tabs" role="tablist" aria-label="映射筛选"><button role="tab" aria-selected="true" data-filter="all" class="active">全部映射</button><button role="tab" aria-selected="false" data-filter="running">运行中</button><button role="tab" aria-selected="false" data-filter="stopped">已停止</button></div><input id="search" aria-label="搜索映射" placeholder="搜索名称、主机或端口…" type="search"></div>
+      <div id="error-banner" class="error-banner" hidden></div>
+      <div id="mapping-list"></div>
+      <div id="empty" class="empty" hidden><div class="empty-symbol">⇄</div><h2>从第一条连接开始</h2><p>把远端服务带到本机，或将流量转发到指定地址。</p><button class="primary new-mapping">＋ 新建映射</button><div class="empty-example"><span>例如</span><code>本机 :18000 <b>→</b> my-server :8000</code></div></div>
+      <div class="footnote"><span><i class="dot green"></i> 配置自动保存 · 关闭页面后继续运行</span><span>仅管理 Portman 创建的映射</span></div>
+    </section>
+  </main>
+</div>
+<dialog id="mapping-dialog">
+  <form id="mapping-form">
+    <div class="dialog-heading"><div><span class="eyebrow">NEW CONNECTION</span><h2 id="form-title">新建映射</h2></div><button type="button" class="close" aria-label="关闭新建映射">×</button></div>
+    <label>映射名称<input name="name" id="map-name" required maxlength="64" placeholder="例如：远程 Jupyter"></label>
+    <label>连接方式<select name="mode" id="map-mode"><option value="ssh-local">SSH · 远端服务映射到本机</option><option value="tcp">TCP · 直接转发</option><option value="ssh-remote">SSH · 本机服务映射到远端</option></select></label>
+    <div id="ssh-fields" class="field-row"><label>SSH 主机<input id="map-via" name="via" list="ssh-aliases" placeholder="my-server / user@host / IP" autocomplete="off"></label><label class="port-field">SSH 端口<input id="map-ssh-port" type="number" min="1" max="65535" placeholder="使用配置"></label></div>
+    <datalist id="ssh-aliases"></datalist>
+    <div class="route-form"><label><span id="listen-label">本机监听地址</span><input id="map-listen" required placeholder="127.0.0.1:18000" value="127.0.0.1:"></label><div class="route-arrow">↓</div><label><span id="target-label">目标地址（从 SSH 主机访问）</span><input id="map-target" required placeholder="127.0.0.1:8000"></label></div>
+    <p id="mode-hint" class="form-hint">复用本机 SSH 配置中的密钥与跳板机。支持主机别名、IP 和 IPv6。</p>
+    <label class="checkbox-label" id="start-field"><input id="map-start" type="checkbox" checked> 保存后立即启动</label>
+    <div id="form-error" class="error-banner" hidden></div>
+    <div class="dialog-footer"><button type="button" class="secondary close">取消</button><button type="submit" class="primary" id="save-mapping">创建映射</button></div>
+  </form>
+</dialog>
+<dialog id="detail-dialog"><div class="dialog-heading"><h2 id="detail-title">详情</h2><button class="close" aria-label="关闭详情">×</button></div><div id="detail-content"></div><div class="dialog-footer"><button class="secondary close">关闭</button></div></dialog>
+<dialog id="delete-dialog"><div class="dialog-heading"><h2>删除映射</h2><button class="close" aria-label="取消删除">×</button></div><p id="delete-text"></p><div class="dialog-footer"><button class="secondary close">取消</button><button class="danger" id="confirm-delete">停止并删除</button></div></dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>
