@@ -110,4 +110,4 @@ node --check Modules/Portman/portman/static/app.js
 
 如果 MacToys 对你有帮助，欢迎 Star、反馈问题或贡献改进。
 
-赞助入口准备中；收款页面开通后会在这里公布。
+也欢迎 [在 Ko-fi 请我喝杯咖啡](https://ko-fi.com/kennyutc)，支持 MacToys 的持续开发与维护。
