@@ -9,9 +9,9 @@ enum AwakeError: LocalizedError {
     case invalidDuration, system(IOReturn), testMode
     var errorDescription: String? {
         switch self {
-        case .invalidDuration: return "防休眠时长无效。"
-        case .system(let code): return "无法启用防止休眠（系统错误 \(code)），请重试。"
-        case .testMode: return "界面测试 · 系统防休眠已关闭"
+        case .invalidDuration: return L("防休眠时长无效。")
+        case .system(let code): return L("无法启用防止休眠（系统错误 %@），请重试。", String(describing: code))
+        case .testMode: return L("界面测试 · 系统防休眠已关闭")
         }
     }
 }

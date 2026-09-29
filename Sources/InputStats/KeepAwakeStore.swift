@@ -6,12 +6,12 @@ enum AwakeDuration: Int, CaseIterable, Identifiable {
     var seconds: TimeInterval? { self == .untilOff ? nil : TimeInterval(rawValue * 60) }
     var label: String {
         switch self {
-        case .untilOff: return "直到关闭"
-        case .minutes15: return "15 分钟"
-        case .minutes30: return "30 分钟"
-        case .hour1: return "1 小时"
-        case .hours2: return "2 小时"
-        case .hours4: return "4 小时"
+        case .untilOff: return L("直到关闭")
+        case .minutes15: return L("15 分钟")
+        case .minutes30: return L("30 分钟")
+        case .hour1: return L("1 小时")
+        case .hours2: return L("2 小时")
+        case .hours4: return L("4 小时")
         }
     }
 }

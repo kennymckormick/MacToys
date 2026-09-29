@@ -90,9 +90,10 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/logs":
                 name = parse_qs(parsed.query).get("name", [""])[0]
                 self.reply(200, self.call("logs", {"name": name}))
-            elif parsed.path in ("/", "/app.js", "/style.css", "/icon.svg"):
+            elif parsed.path in ("/", "/app.js", "/i18n.js", "/style.css", "/icon.svg"):
                 filename, mime = {"/": ("index.html", "text/html; charset=utf-8"),
                                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+                                  "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"),
                                   "/style.css": ("style.css", "text/css; charset=utf-8"),
                                   "/icon.svg": ("icon.svg", "image/svg+xml")}[parsed.path]
                 self.reply(200, (Path(__file__).parent / "static" / filename).read_bytes(), mime)

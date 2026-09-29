@@ -37,11 +37,11 @@ final class PortmanController: ObservableObject {
             process.arguments = ["gui", "--no-open", "--json"]
         } else if let resource = Bundle.main.resourceURL?.appendingPathComponent("Portman"), FileManager.default.fileExists(atPath: resource.path) {
             let python = ["/Library/Developer/CommandLineTools/usr/bin/python3", "/opt/homebrew/bin/python3", "/usr/bin/python3"].first(where: { FileManager.default.isExecutableFile(atPath: $0) })
-            guard let python else { throw PortmanError.message("未找到 Python 3，请安装 Portman 的运行环境。") }
+            guard let python else { throw PortmanError.message(L("未找到 Python 3，请安装 Portman 的运行环境。")) }
             process.executableURL = URL(fileURLWithPath: python)
             process.arguments = ["-m", "portman", "gui", "--no-open", "--json"]
             environment["PYTHONPATH"] = resource.path
-        } else { throw PortmanError.message("未找到 Portman，请先安装或检查 ~/.local/bin/portman。") }
+        } else { throw PortmanError.message(L("未找到 Portman，请先安装或检查 ~/.local/bin/portman。")) }
         // Test instances explicitly use their own daemon, never live mappings.
         if let test = environment["INPUTSTATS_TEST_HOME"] { environment["PORTMAN_HOME"] = URL(fileURLWithPath: test).appendingPathComponent("portman").path }
         process.environment = environment
@@ -57,10 +57,10 @@ final class PortmanController: ObservableObject {
               let value = json["url"] as? String, var parts = URLComponents(string: value),
               parts.scheme == "http", parts.host == "127.0.0.1", let port = parts.port, (1...65535).contains(port),
               parts.user == nil, parts.password == nil, parts.fragment?.hasPrefix("token=") == true else {
-            throw PortmanError.message("无法连接 Portman 后台。请重试，或运行 portman daemon status 查看状态。")
+            throw PortmanError.message(L("无法连接 Portman 后台。请重试，或运行 portman daemon status 查看状态。"))
         }
         parts.queryItems = [URLQueryItem(name: "embedded", value: "1")]
-        guard let url = parts.url else { throw PortmanError.message("Portman 返回了无效地址。") }
+        guard let url = parts.url else { throw PortmanError.message(L("Portman 返回了无效地址。")) }
         return url
     }
     enum PortmanError: Error, LocalizedError {
@@ -70,24 +70,25 @@ final class PortmanController: ObservableObject {
 }
 
 struct PortmanView: View {
+    @ObservedObject private var language = Localization.shared
     @StateObject private var controller = PortmanController()
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Label("Portman · 端口转发", systemImage: "arrow.left.arrow.right").font(.headline)
+                Label(L("Portman · 端口转发"), systemImage: "arrow.left.arrow.right").font(.headline)
                 Spacer()
-                Button("SSH 主机") { controller.webView?.evaluateJavaScript("document.getElementById('nav-hosts').click()") }
-                Button("命令行") { controller.webView?.evaluateJavaScript("document.getElementById('nav-help').click()") }
-                Button { controller.url = nil; controller.connect() } label: { Image(systemName: "arrow.clockwise") }.help("重新连接")
+                Button(L("SSH 主机")) { controller.webView?.evaluateJavaScript("document.getElementById('nav-hosts').click()") }
+                Button(L("命令行")) { controller.webView?.evaluateJavaScript("document.getElementById('nav-help').click()") }
+                Button { controller.url = nil; controller.connect() } label: { Image(systemName: "arrow.clockwise") }.help(L("重新连接"))
             }.padding(20)
             Divider()
             if let url = controller.url {
-                PortmanWebView(url: url, controller: controller)
+                PortmanWebView(url: url, controller: controller, language: language.code)
             } else if let error = controller.error {
                 ContentUnavailableView {
-                    Label("Portman 暂不可用", systemImage: "network.slash")
-                } description: { Text(error) } actions: { Button("重试") { controller.connect() } }
-            } else { Spacer(); ProgressView("正在连接本机 Portman…"); Spacer() }
+                    Label(L("Portman 暂不可用"), systemImage: "network.slash")
+                } description: { Text(error) } actions: { Button(L("重试")) { controller.connect() } }
+            } else { Spacer(); ProgressView(L("正在连接本机 Portman…")); Spacer() }
         }
         .onAppear { controller.connect() }
         .onDisappear { controller.disconnectView() }
@@ -97,24 +98,47 @@ struct PortmanView: View {
 private struct PortmanWebView: NSViewRepresentable {
     let url: URL
     let controller: PortmanController
-    func makeCoordinator() -> Coordinator { Coordinator(controller: controller, origin: url) }
+    let language: String
+    func makeCoordinator() -> Coordinator { Coordinator(controller: controller, origin: url, language: language) }
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
+        if let scriptURL = Bundle.main.resourceURL?.appendingPathComponent("Portman/portman/static/i18n.js"),
+           let script = try? String(contentsOf: scriptURL, encoding: .utf8) {
+            let initialLanguage = language == "zh-Hans" ? "zh-Hans" : "en"
+            configuration.userContentController.addUserScript(WKUserScript(
+                source: "window.MacToysLanguage = '\(initialLanguage)';\n" + script,
+                injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
         controller.webView = view
         view.load(URLRequest(url: url))
         return view
     }
-    func updateNSView(_ view: WKWebView, context: Context) {}
+    func updateNSView(_ view: WKWebView, context: Context) {
+        guard context.coordinator.language != language else { return }
+        context.coordinator.language = language
+        context.coordinator.applyLanguage(to: view)
+    }
     static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) {
         view.stopLoading(); view.navigationDelegate = nil; view.loadHTMLString("", baseURL: nil)
     }
     final class Coordinator: NSObject, WKNavigationDelegate {
         let controller: PortmanController
         let origin: URL
-        init(controller: PortmanController, origin: URL) { self.controller = controller; self.origin = origin }
+        var language: String
+        init(controller: PortmanController, origin: URL, language: String) {
+            self.controller = controller; self.origin = origin; self.language = language
+        }
+        func applyLanguage(to view: WKWebView) {
+            let code = language == "zh-Hans" ? "zh-Hans" : "en"
+            view.evaluateJavaScript("window.MacToysPortman?.setLanguage('\(code)')")
+        }
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            // A language change during loading must win over the initial user script.
+            applyLanguage(to: webView)
+        }
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             guard let target = action.request.url else { decisionHandler(.cancel); return }
             let same = target.scheme == origin.scheme && target.host == origin.host && target.port == origin.port
@@ -122,10 +146,10 @@ private struct PortmanWebView: NSViewRepresentable {
         }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             if (error as NSError).code == NSURLErrorCancelled { return }
-            controller.url = nil; controller.error = "本机 Portman 页面加载失败，请重新连接。"
+            controller.url = nil; controller.error = L("本机 Portman 页面加载失败，请重新连接。")
         }
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-            controller.url = nil; controller.error = "Portman 界面进程已退出，请重新连接。"
+            controller.url = nil; controller.error = L("Portman 界面进程已退出，请重新连接。")
         }
     }
 }

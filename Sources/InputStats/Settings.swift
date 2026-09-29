@@ -12,6 +12,7 @@ final class AppSettings: ObservableObject {
     @Published var paused: Bool { didSet { save(paused, "paused"); changed() } }
     @Published var includePaste: Bool { didSet { save(includePaste, "includePaste"); changed() } }
     @Published var sourceMode: String { didSet { save(sourceMode, "sourceMode"); changed() } }
+    @Published var quickTool: QuickTool { didSet { save(quickTool.rawValue, "quickTool") } }
     @Published var launchAtLogin = false
     @Published var loginError: String?
     private let defaults: UserDefaults
@@ -23,6 +24,7 @@ final class AppSettings: ObservableObject {
         includePaste = defaults.bool(forKey: "includePaste")
         let mode = defaults.string(forKey: "sourceMode") ?? "auto"
         sourceMode = ["auto", "keyboard", "voice"].contains(mode) ? mode : "auto"
+        quickTool = defaults.string(forKey: "quickTool").flatMap(QuickTool.init(rawValue:)) ?? .input
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
     private func save(_ value: Any, _ key: String) { defaults.set(value, forKey: key) }
@@ -32,7 +34,7 @@ final class AppSettings: ObservableObject {
             if enabled { try SMAppService.mainApp.register() }
             else { try SMAppService.mainApp.unregister() }
             launchAtLogin = SMAppService.mainApp.status == .enabled
-            loginError = SMAppService.mainApp.status == .requiresApproval ? "请在系统设置的登录项中启用 MacToys。" : nil
+            loginError = SMAppService.mainApp.status == .requiresApproval ? L("请在系统设置的登录项中启用 MacToys。") : nil
         } catch {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             loginError = error.localizedDescription

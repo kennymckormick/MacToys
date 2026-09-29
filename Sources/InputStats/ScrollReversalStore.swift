@@ -35,9 +35,9 @@ final class ScrollReversalStore: ObservableObject {
     }
     var status: String {
         if let issue { return issue }
-        if !enabled { return "已关闭" }
-        if !reverseVertical && !reverseHorizontal { return "请选择要反转的方向" }
-        return running ? "鼠标滚轮反转已启用" : "反转已暂停"
+        if !enabled { return L("已关闭") }
+        if !reverseVertical && !reverseHorizontal { return L("请选择要反转的方向") }
+        return running ? L("鼠标滚轮反转已启用") : L("反转已暂停")
     }
 
     init(defaults: UserDefaults? = nil, allowEventTap: Bool? = nil,
@@ -80,18 +80,18 @@ final class ScrollReversalStore: ObservableObject {
         guard enabled, reverseVertical || reverseHorizontal, !sleeping else {
             stopTap(); issue = nil; return
         }
-        guard allowEventTap else { stopTap(); issue = "界面测试 · 全局反转已关闭"; return }
+        guard allowEventTap else { stopTap(); issue = L("界面测试 · 全局反转已关闭"); return }
         if let app = conflictingApp() {
-            stopTap(); issue = "\(app) 正在运行。退出它后自动启用，避免重复反转。"; return
+            stopTap(); issue = L("%@ 正在运行。退出它后自动启用，避免重复反转。", String(describing: app)); return
         }
         guard accessAvailable() else {
-            stopTap(); issue = "辅助功能授权未生效，请在系统设置中检查 MacToys 的权限。"; return
+            stopTap(); issue = L("辅助功能授权未生效，请在系统设置中检查 MacToys 的权限。"); return
         }
         issue = nil
         if let tap, CFMachPortIsValid(tap) {
             CGEvent.tapEnable(tap: tap, enable: true)
             running = CGEvent.tapIsEnabled(tap: tap)
-            if !running { issue = "滚轮监听未能恢复，请重试。" }
+            if !running { issue = L("滚轮监听未能恢复，请重试。") }
             return
         }
         stopTap()
@@ -104,23 +104,23 @@ final class ScrollReversalStore: ObservableObject {
                     if store.started, store.enabled, !store.sleeping, let tap = store.tap {
                         CGEvent.tapEnable(tap: tap, enable: true)
                         store.running = CGEvent.tapIsEnabled(tap: tap)
-                        if !store.running { store.issue = "滚轮监听已暂停，请重试。" }
+                        if !store.running { store.issue = L("滚轮监听已暂停，请重试。") }
                     }
                 } else if type == .scrollWheel {
                     MouseWheelReversal.apply(to: event, options: store.options)
                 }
                 return Unmanaged.passUnretained(event)
             }, userInfo: Unmanaged.passUnretained(self).toOpaque()) else {
-                issue = "无法连接滚轮监听，请检查辅助功能权限后重试。"; return
+                issue = L("无法连接滚轮监听，请检查辅助功能权限后重试。"); return
             }
         guard let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0) else {
-            CFMachPortInvalidate(port); issue = "无法创建滚轮监听，请重试。"; return
+            CFMachPortInvalidate(port); issue = L("无法创建滚轮监听，请重试。"); return
         }
         tap = port; source = runLoopSource
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: port, enable: true)
         running = CGEvent.tapIsEnabled(tap: port)
-        if !running { stopTap(); issue = "滚轮监听未能启用，请重试。" }
+        if !running { stopTap(); issue = L("滚轮监听未能启用，请重试。") }
     }
 
     private func stopTap() {

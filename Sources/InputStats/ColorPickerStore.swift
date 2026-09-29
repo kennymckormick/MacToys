@@ -64,7 +64,7 @@ final class ColorPickerStore: ObservableObject {
         guard registration.action != nil else { return }
         guard shortcutEnabled, !isRecording else { registration.unregister(); shortcutError = nil; return }
         let status = registration.register(shortcut)
-        shortcutError = status == noErr ? nil : "快捷键未能注册（\(status)），可能已被占用。请更换组合键；仍可使用取色按钮。"
+        shortcutError = status == noErr ? nil : L("快捷键未能注册（%@），可能已被占用。请更换组合键；仍可使用取色按钮。", String(describing: status))
     }
     func beginRecording() {
         guard !isRecording else { cancelRecording(); return }
@@ -73,7 +73,7 @@ final class ColorPickerStore: ObservableObject {
             guard let self else { return event }
             if event.keyCode == 53 { self.cancelRecording(); return nil }
             guard let candidate = ColorShortcut(event: event) else {
-                self.shortcutError = "请使用字母或数字，加上 ⌘、⌥、⌃ 中的至少一个修饰键。"; return nil
+                self.shortcutError = L("请使用字母或数字，加上 ⌘、⌥、⌃ 中的至少一个修饰键。"); return nil
             }
             let status = self.registration.register(candidate)
             self.endRecording()
@@ -83,7 +83,7 @@ final class ColorPickerStore: ObservableObject {
                 self.shortcutError = nil
             } else {
                 self.updateRegistration()
-                self.shortcutError = "这个快捷键未能注册（\(status)），已保留原设置。请换一个组合键。"
+                self.shortcutError = L("这个快捷键未能注册（%@），已保留原设置。请换一个组合键。", String(describing: status))
             }
             return nil
         }
@@ -107,11 +107,11 @@ final class ColorPickerStore: ObservableObject {
                 self.isSampling = false
                 guard let color else { completion(false); return }
                 guard let value = ScreenColor(nativeColor: color) else {
-                    self.errorMessage = "这个颜色无法转换为 sRGB，请重新取色。"; completion(false); return
+                    self.errorMessage = L("这个颜色无法转换为 sRGB，请重新取色。"); completion(false); return
                 }
                 self.select(value); self.remember(value)
                 if self.autoCopy { self.copy(self.format) }
-                else { self.message = "已拾取 \(value.hex)" }
+                else { self.message = L("已拾取 %@", String(describing: value.hex)) }
                 completion(true)
             }
         }
@@ -124,15 +124,15 @@ final class ColorPickerStore: ObservableObject {
         if let value = ScreenColor(nativeColor: color) { select(value) }
     }
     func apply(hex: String) {
-        guard let color = ScreenColor(hex: hex) else { errorMessage = "请输入 3 位或 6 位 HEX，例如 #F80 或 #FF8800。"; message = nil; return }
+        guard let color = ScreenColor(hex: hex) else { errorMessage = L("请输入 3 位或 6 位 HEX，例如 #F80 或 #FF8800。"); message = nil; return }
         select(color); remember(color)
     }
     func copy(_ format: ColorTextFormat) {
         let text = selected.formatted(format)
         pasteboard.clearContents()
         if pasteboard.setString(text, forType: .string) {
-            remember(selected); message = "已复制 \(text)"; errorMessage = nil
-        } else { errorMessage = "无法写入剪贴板，请重试。" }
+            remember(selected); message = L("已复制 %@", String(describing: text)); errorMessage = nil
+        } else { errorMessage = L("无法写入剪贴板，请重试。") }
     }
     private func remember(_ color: ScreenColor) {
         var recent = ColorHistory(hexValues: history.map(\.hex)); recent.record(color)
@@ -141,7 +141,7 @@ final class ColorPickerStore: ObservableObject {
     func toggleFavorite(_ color: ScreenColor) {
         if favorites.contains(color) { favorites.removeAll { $0 == color } }
         else {
-            guard favorites.count < 64 else { errorMessage = "收藏已满（64 个），请先移除不需要的颜色。"; return }
+            guard favorites.count < 64 else { errorMessage = L("收藏已满（64 个），请先移除不需要的颜色。"); return }
             favorites.append(color)
         }
         defaults.set(favorites.map(\.hex), forKey: "color.favorites")

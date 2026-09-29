@@ -4,6 +4,11 @@
 
 Input statistics, port forwarding, screen color picking, mouse wheel reversal, and sleep prevention for macOS 14+.
 
+## Menu bar
+
+- Switch between Stats, Colors, Scroll, and Awake tabs. The panel remembers your last tab.
+- Use English or Simplified Chinese, or follow the system language. Switch without restarting.
+
 ## InputStats
 
 - Count characters and words, with separate keyboard and dictation totals. Detect dictation through Fn or select the source manually.
@@ -35,7 +40,7 @@ Input statistics, port forwarding, screen color picking, mouse wheel reversal, a
 
 - Prevent idle sleep until switched off, or for 15 minutes to 4 hours.
 - Optionally keep the display on while the Mac stays awake.
-- Toggle from the menu bar; a coffee cup shows when active. Sessions end when MacToys quits.
+- Toggle from the menu bar; a dot beside the tool icon indicates an active session. Sessions end when MacToys quits.
 
 [Build from source](docs/building.md) · [Usage notes (中文)](docs/usage.zh-CN.md)
 

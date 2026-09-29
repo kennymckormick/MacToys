@@ -313,7 +313,7 @@ final class InputMonitor {
                 NotificationCenter.default.post(name: .statsDidChange, object: nil)
             }
         } catch {
-            DispatchQueue.main.async { MonitorStatus.shared.storageError = error.localizedDescription }
+            DispatchQueue.main.async { MonitorStatus.shared.storageError = Database.errorDescription(error) }
             scheduleFlush(after: 5)
         }
     }

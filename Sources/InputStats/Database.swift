@@ -11,6 +11,13 @@ final class Database {
             .appendingPathComponent("InputStats", isDirectory: true)
     }()
     static let shared = Database()
+    static func errorDescription(_ error: Error) -> String {
+        switch error as? StorageError {
+        case .sqlite(let message): return L("统计数据读写失败：%@", L(message))
+        case .invalidDelta: return L("拒绝写入负数统计增量")
+        case nil: return error.localizedDescription
+        }
+    }
     private let storage: Result<StatsDatabase, Error>
     struct Recovery: Codable { let id: String; let buckets: [MinuteBucket] }
     private init() {

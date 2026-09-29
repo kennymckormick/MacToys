@@ -94,9 +94,9 @@ check(!store.running && store.issue != nil, "测试实例不安装全局滚轮�
 let restored = ScrollReversalStore(defaults: defaults, allowEventTap: false)
 check(restored.enabled && !restored.reverseVertical && restored.reverseHorizontal, "重启后保留总开关和两轴设置")
 store.reverseHorizontal = false
-check(store.issue == nil && !store.running && store.status == "请选择要反转的方向", "所有方向关闭时移除监听")
+check(store.issue == nil && !store.running && store.status == L("请选择要反转的方向"), "所有方向关闭时移除监听")
 store.enabled = false
-check(store.status == "已关闭", "关闭总开关立即恢复状态")
+check(store.status == L("已关闭"), "关闭总开关立即恢复状态")
 store.stop(); restored.stop()
 
 defaults.set(true, forKey: "scroll.enabled"); defaults.set(true, forKey: "scroll.vertical")
@@ -108,7 +108,7 @@ gated.start()
 check(!gated.running && gated.issue?.contains("Scroll Reverser") == true && accessChecks == 0,
       "检测到旧程序时不安装重复反转监听")
 conflict = nil; gated.retry()
-check(!gated.running && gated.issue?.contains("辅助功能") == true && accessChecks == 1,
+check(!gated.running && gated.issue == L("辅助功能授权未生效，请在系统设置中检查 MacToys 的权限。") && accessChecks == 1,
       "权限不足时说明原因，不弹出授权或修改系统设置")
 gated.stop(); gated.enabled = false; gated.enabled = true
 check(accessChecks == 1 && !gated.running, "停止后设置变化不重建全局监听")

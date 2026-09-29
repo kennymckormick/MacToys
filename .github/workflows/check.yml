@@ -20,8 +20,12 @@ jobs:
         run: bash scripts/check-scroll-reversal.sh
       - name: Keep awake checks
         run: bash scripts/check-keep-awake.sh
+      - name: Language and translation checks
+        run: bash scripts/check-localization.sh
       - name: Portman TCP and API checks
         working-directory: Modules/Portman
         run: PYTHONPATH=tests python3 -m unittest -v test_portman.SpecTests test_portman.LiveTests
       - name: Check GUI JavaScript
-        run: node --check Modules/Portman/portman/static/app.js
+        run: |
+          node --check Modules/Portman/portman/static/app.js
+          node --check Modules/Portman/portman/static/i18n.js

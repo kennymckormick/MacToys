@@ -3,6 +3,7 @@ import InputStatsCore
 
 /// GitHub 式全年热力图：列=周，行=星期，颜色越深输入越多。
 struct HeatmapView: View {
+    @ObservedObject private var language = Localization.shared
     let points: [StatPoint]      // 升序的每日数据（约 371 天）
     let useWords: Bool
 
@@ -44,7 +45,7 @@ struct HeatmapView: View {
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(color(for: value(p), maximum: maximum))
                                 .frame(width: cell, height: cell)
-                                .help("\(p.label)：\(value(p)) \(useWords ? "词" : "字")")
+                                .help("\(p.label)：\(value(p)) \(useWords ? L("词") : L("字"))")
                         } else {
                             Color.clear.frame(width: cell, height: cell)
                         }
@@ -62,15 +63,15 @@ struct HeatmapView: View {
 
     private var legend: some View {
         HStack(spacing: 6) {
-            Text("近一年 · 颜色越深输入越多").font(.caption2).foregroundStyle(.secondary)
+            Text(L("近一年 · 颜色越深输入越多")).font(.caption2).foregroundStyle(.secondary)
             Spacer()
-            Text("少").font(.caption2).foregroundStyle(.secondary)
+            Text(L("少")).font(.caption2).foregroundStyle(.secondary)
             ForEach([0.0, 0.35, 0.6, 0.85, 1.0], id: \.self) { r in
                 RoundedRectangle(cornerRadius: 2)
                     .fill(r == 0 ? Color.secondary.opacity(0.15) : Color.green.opacity(0.25 + 0.75 * r))
                     .frame(width: cell, height: cell)
             }
-            Text("多").font(.caption2).foregroundStyle(.secondary)
+            Text(L("多")).font(.caption2).foregroundStyle(.secondary)
         }
     }
 }

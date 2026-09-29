@@ -76,7 +76,7 @@ final class StatsStore: ObservableObject {
                 DispatchQueue.main.async {
                     guard let self, self.active, self.generation == version else { return }
                     self.needsReload = true
-                    self.errorMessage = error.localizedDescription
+                    self.errorMessage = Database.errorDescription(error)
                 }
             }
         }

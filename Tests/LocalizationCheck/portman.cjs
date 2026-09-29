@@ -1,0 +1,15 @@
+'use strict';
+const assert = require('node:assert/strict');
+const { english, translate } = require('../../Modules/Portman/portman/static/i18n.js');
+assert.equal(translate('  新建映射 '), '  New mapping ');
+assert.equal(translate('运行中', 'user'), '运行中');
+assert.equal(translate('运行中', 'title'), '运行中');
+assert.equal(translate('我的主机 · 日志', 'title'), '我的主机 · Logs');
+assert.equal(translate('远端监听 · 我的主机', 'endpoint'), 'Remote listener · 我的主机');
+assert.equal(translate('“中文名称”将停止转发，并从已保存的映射中移除。', 'delete'), '“中文名称” will stop forwarding and be removed from saved mappings.');
+assert.equal(translate('23 次连接 · ↑ 4 KB · ↓ 5 MB · 最近检查已返回', 'meta'), '23 connections · ↑ 4 KB · ↓ 5 MB · Last check returned');
+assert.equal(translate('监听端口：可连接\n目标端口：未验证', 'check'), 'Listener: Reachable\nTarget: Not checked');
+assert.equal(translate('运行中 # 内部名称'), '运行中 # 内部名称');
+assert.equal(translate('服务器名称', 'user'), '服务器名称');
+assert.ok(Object.values(english).every(text => !/[\u3400-\u9fff]/.test(text)));
+console.log('Portman localization checks: 11/11 passed');

@@ -28,7 +28,7 @@ enum Exporter {
             NSApp.activate(ignoringOtherApps: true)
             if panel.runModal() == .OK, let url = panel.url { try data.write(to: url, options: .atomic) }
         } catch {
-            let alert = NSAlert(); alert.messageText = "导出失败"; alert.informativeText = error.localizedDescription
+            let alert = NSAlert(); alert.messageText = L("导出失败"); alert.informativeText = Database.errorDescription(error)
             alert.runModal()
         }
     }
