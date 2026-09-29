@@ -16,6 +16,8 @@ jobs:
         run: .build-mactoys/release/SelfCheck
       - name: Color picker checks
         run: bash scripts/check-color-picker.sh
+      - name: Scroll reversal checks
+        run: bash scripts/check-scroll-reversal.sh
       - name: Portman TCP and API checks
         working-directory: Modules/Portman
         run: PYTHONPATH=tests python3 -m unittest -v test_portman.SpecTests test_portman.LiveTests

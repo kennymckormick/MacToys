@@ -2,10 +2,10 @@ import SwiftUI
 
 final class ToolsModel: ObservableObject {
     enum Tool: String, CaseIterable, Identifiable {
-        case input = "输入统计", ports = "端口转发", colors = "屏幕取色", settings = "设置"
+        case input = "输入统计", ports = "端口转发", colors = "屏幕取色", scroll = "滚轮反转", settings = "设置"
         var id: String { rawValue }
         var symbol: String {
-            switch self { case .input: return "keyboard"; case .ports: return "arrow.left.arrow.right"; case .colors: return "eyedropper"; case .settings: return "gearshape" }
+            switch self { case .input: return "keyboard"; case .ports: return "arrow.left.arrow.right"; case .colors: return "eyedropper"; case .scroll: return "computermouse"; case .settings: return "gearshape" }
         }
     }
     @Published var selection: Tool = .input
@@ -15,6 +15,7 @@ struct ToolsView: View {
     @ObservedObject var model: ToolsModel
     @ObservedObject var settings: AppSettings
     @ObservedObject var colors: ColorPickerStore
+    @ObservedObject var scroll: ScrollReversalStore
     var onPickColor: () -> Void
     @StateObject private var stats = StatsStore()
     var body: some View {
@@ -29,10 +30,12 @@ struct ToolsView: View {
                     row(.input, subtitle: "InputStats")
                     row(.ports, subtitle: "Portman")
                     row(.colors, subtitle: "Color Picker")
+                    row(.scroll, subtitle: "Scroll Reversal")
                 }
                 Spacer()
                 row(.settings, subtitle: "偏好与数据")
-                Text("0.2 · 本机运行").font(.caption2).foregroundStyle(.tertiary)
+                Text("\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") · 本机运行")
+                    .font(.caption2).foregroundStyle(.tertiary)
             }.padding(20).frame(width: 205).background(.thinMaterial)
             Divider()
             Group {
@@ -42,6 +45,7 @@ struct ToolsView: View {
                         ScrollView { StatsView(store: stats, settings: settings, onOpenSettings: { model.selection = .settings }) }
                     case .ports: PortmanView()
                     case .colors: ColorPickerView(store: colors, onPick: onPickColor)
+                    case .scroll: ScrollReversalView(store: scroll)
                     case .settings: SettingsView(settings: settings)
                     }
                 } else { Color.clear }

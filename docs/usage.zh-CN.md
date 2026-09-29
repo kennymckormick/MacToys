@@ -20,6 +20,16 @@
 
 交互参考 [PowerToys Color Picker](https://learn.microsoft.com/en-us/windows/powertoys/color-picker) 的取色、复制与历史流程，以及 [System Color Picker](https://sindresorhus.com/system-color-picker) 的原生取色和快捷键形式。实现使用 [Apple NSColorSampler](https://developer.apple.com/documentation/appkit/nscolorsampler)。
 
+## 鼠标滚轮反转
+
+在侧栏「滚轮反转」开启总开关，选择垂直或水平滚动方向；菜单栏右键也可开关。反转相对于 macOS 当前滚动设置进行，不修改系统的「自然滚动」。偏好保存在本机，关闭窗口后继续生效，退出 MacToys 后恢复原方向。
+
+本功能处理普通鼠标的离散滚轮事件。触控板、惯性滚动、Magic Mouse 和报告为连续滚动的高精度/平滑滚动设备原样通过；其他软件生成的滚动也不再处理。这样不会因刚用过鼠标而误反转随后到达的触控板惯性事件。暂不提供 Magic Mouse 或连续滚动鼠标的反转。
+
+复用 MacToys 的辅助功能授权，不自动请求或重置权限。若 Scroll Reverser 正在运行，MacToys 会暂停自己的反转并提示；退出旧程序后自动接管。其他修改滚动的软件也应关闭其反转功能，以免效果叠加。
+
+只监听滚轮事件，在原事件上反转方向并保留行、定点与像素步长，不重新发送事件、不采集键盘或指针移动、不记录滚动历史。关闭总开关或关闭两个方向时移除监听，无定时轮询。
+
 ## 统计口径与边界
 
 **字符**：新增的 Unicode 字素，包括空格、标点、换行；组合 emoji 计 1。删除不扣除，删后重打计为新的输入。

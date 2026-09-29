@@ -37,8 +37,8 @@ struct SettingsView: View {
                     Spacer(); Button("清空历史数据…", role: .destructive) { confirmReset = true }
                 }
             }
-            Section("MacToys 0.2") {
-                Text("输入统计 + Portman + 屏幕取色。关闭窗口后输入统计、转发和取色快捷键继续可用；退出 MacToys 会停止输入统计和快捷键，Portman 的连接继续由后台管理。")
+            Section("MacToys") {
+                Text("输入统计、端口转发、屏幕取色与滚轮反转。关闭窗口后继续运行；退出 MacToys 会停止输入统计、取色快捷键和滚轮反转，Portman 的连接继续由后台管理。")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

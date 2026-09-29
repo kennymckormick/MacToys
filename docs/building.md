@@ -57,6 +57,7 @@ Run from the repository root:
 ```sh
 swift run -c release --scratch-path .build-mactoys SelfCheck
 bash scripts/check-color-picker.sh
+bash scripts/check-scroll-reversal.sh
 (cd Modules/Portman && python3 -m unittest discover -s tests -v)
 node --check Modules/Portman/portman/static/app.js
 ```

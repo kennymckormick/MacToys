@@ -2,7 +2,7 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-Input statistics, port forwarding, and a screen color picker for macOS 14+.
+Input statistics, port forwarding, screen color picking, and mouse wheel reversal for macOS 14+.
 
 ## InputStats
 
@@ -24,6 +24,12 @@ Input statistics, port forwarding, and a screen color picker for macOS 14+.
 - Copy HEX, RGB, or HSL, with optional automatic copying after selection.
 - Enter a HEX value or adjust a color in the system color panel.
 - Keep recent colors and save favorites.
+
+## Scroll Reversal
+
+- Reverse vertical and horizontal mouse wheel scrolling independently.
+- Keep trackpad scrolling and momentum unchanged. Continuous devices, including Magic Mouse, retain their original direction.
+- Toggle from the menu bar; keep the setting when the window closes.
 
 [Build from source](docs/building.md) · [Usage notes (中文)](docs/usage.zh-CN.md)
 
