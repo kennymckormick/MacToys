@@ -12,7 +12,7 @@ final class AppSettings: ObservableObject {
     @Published var paused: Bool { didSet { save(paused, "paused"); changed() } }
     @Published var includePaste: Bool { didSet { save(includePaste, "includePaste"); changed() } }
     @Published var sourceMode: String { didSet { save(sourceMode, "sourceMode"); changed() } }
-    @Published var quickTool: QuickTool { didSet { save(quickTool.rawValue, "quickTool") } }
+    let quickPanel: QuickPanelSettings
     @Published var launchAtLogin = false
     @Published var loginError: String?
     private let defaults: UserDefaults
@@ -24,7 +24,7 @@ final class AppSettings: ObservableObject {
         includePaste = defaults.bool(forKey: "includePaste")
         let mode = defaults.string(forKey: "sourceMode") ?? "auto"
         sourceMode = ["auto", "keyboard", "voice"].contains(mode) ? mode : "auto"
-        quickTool = defaults.string(forKey: "quickTool").flatMap(QuickTool.init(rawValue:)) ?? .input
+        quickPanel = QuickPanelSettings(defaults: defaults)
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
     private func save(_ value: Any, _ key: String) { defaults.set(value, forKey: key) }

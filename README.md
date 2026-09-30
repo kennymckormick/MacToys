@@ -2,12 +2,19 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-Input statistics, port forwarding, screen color picking, mouse wheel reversal, and sleep prevention for macOS 14+.
+Todo lists, input statistics, port forwarding, screen color picking, mouse wheel reversal, and sleep prevention for macOS 14+.
 
 ## Menu bar
 
-- Switch between Stats, Colors, Scroll, and Awake tabs. The panel remembers your last tab.
+- Choose up to four tabs from Todo, Stats, Colors, Scroll, and Awake in Settings → Quick Panel.
+- Set which tab opens each time you click the menu bar icon. Todo is the default.
 - Use English or Simplified Chinese, or follow the system language. Switch without restarting.
+
+## Todo List
+
+- Add, edit, complete, and delete tasks from the menu bar or main window.
+- Expand completed tasks to restore them, or clear them together.
+- Tasks are shared between both views and saved locally across restarts.
 
 ## InputStats
 

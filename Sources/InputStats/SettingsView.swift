@@ -2,11 +2,32 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
+    @ObservedObject var quickPanel: QuickPanelSettings
     @ObservedObject private var language = Localization.shared
     @State private var confirmReset = false
     @State private var errorMessage: String?
     var body: some View {
         Form {
+            Section(L("小菜单")) {
+                HStack {
+                    Text(L("选择常用功能"))
+                    Spacer()
+                    Text("\(quickPanel.configuration.tools.count) / \(QuickPanelSettings.limit)")
+                        .monospacedDigit().foregroundStyle(.secondary)
+                }
+                ForEach(QuickTool.allCases) { tool in
+                    let included = quickPanel.configuration.tools.contains(tool)
+                    Toggle(isOn: Binding(get: { quickPanel.configuration.tools.contains(tool) }, set: { quickPanel.setIncluded($0, tool: tool) })) {
+                        Label(tool.tool.title, systemImage: tool.tool.symbol)
+                    }
+                    .disabled(included ? quickPanel.configuration.tools.count == 1 : quickPanel.configuration.tools.count == QuickPanelSettings.limit)
+                }
+                Picker(L("默认打开"), selection: Binding(get: { quickPanel.configuration.preferred }, set: quickPanel.setPreferred)) {
+                    ForEach(quickPanel.configuration.tools) { Text($0.tool.title).tag($0) }
+                }.id(language.code)
+                Text(L("选择 1–4 个功能。每次点击菜单栏图标时，打开默认页签；其他功能仍可在主窗口使用。"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section(L("通用")) {
                 Picker(L("语言 / Language"), selection: $language.language) {
                     ForEach(AppLanguage.allCases) { Text($0.label).tag($0) }
@@ -30,7 +51,7 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(L("本机数据")) {
-                Text(L("只保存分钟级计数，不保存输入内容。原 InputStats 历史记录继续保留。"))
+                Text(L("输入统计只保存计数，不记录输入原文。待办清单单独保存在本机，清空统计不会删除待办。"))
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Text(L("导出每日统计"))
@@ -42,7 +63,7 @@ struct SettingsView: View {
                 }
             }
             Section("MacToys") {
-                Text(L("输入统计、端口转发、屏幕取色、滚轮反转与防止休眠。关闭窗口后继续运行；退出 MacToys 会停止统计、快捷键、滚轮反转和防止休眠，Portman 的连接继续由后台管理。"))
+                Text(L("待办清单、输入统计、端口转发、屏幕取色、滚轮反转与防止休眠。关闭窗口后继续运行；退出 MacToys 会停止统计、快捷键、滚轮反转和防止休眠，Portman 的连接继续由后台管理。"))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

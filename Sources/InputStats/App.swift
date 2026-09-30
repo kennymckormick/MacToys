@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
     private let colors = ColorPickerStore()
     private let scroll = ScrollReversalStore()
     private let awake = KeepAwakeStore()
+    private lazy var todos = TodoStore(url: Database.directory.appendingPathComponent("todos.json"))
     private var awakeStateToken: AnyCancellable?
     private var languageToken: NSObjectProtocol?
     private var lockFD: Int32 = -1
@@ -91,7 +92,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
                 "scrollReversalError": scroll.issue ?? "",
                 "awakeEnabled": awake.enabled, "awakeKeepDisplayAwake": awake.keepDisplayAwake,
                 "awakeDurationMinutes": awake.duration.rawValue, "awakeEndsAt": awake.endsAt?.ISO8601Format() ?? "",
-                "awakeError": awake.issue ?? "", "language": Localization.shared.code, "quickTool": AppSettings.shared.quickTool.rawValue]
+                "awakeError": awake.issue ?? "", "language": Localization.shared.code,
+                "quickTools": AppSettings.shared.quickPanel.configuration.tools.map(\.rawValue),
+                "quickDefault": AppSettings.shared.quickPanel.configuration.preferred.rawValue,
+                "todoStorageReady": todos.canEdit]
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 FileHandle.standardOutput.write(data); FileHandle.standardOutput.write(Data("\n".utf8))
             }
@@ -106,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         button.image = NSImage(systemSymbolName: "wrench.and.screwdriver", accessibilityDescription: L("MacToys 工具箱"))
         // Keep the toolbox identity stable; a small dot indicates an active awake session.
         button.title = awakeEnabled ? " ·" : ""
-        button.toolTip = awakeEnabled ? L("MacToys · 防止休眠已开启（右键可关闭）") : L("MacToys · 输入统计、端口转发、屏幕取色、滚轮反转与防止休眠")
+        button.toolTip = awakeEnabled ? L("MacToys · 防止休眠已开启（右键可关闭）") : L("MacToys · 你的 Mac 工具箱")
     }
     /// Isolated native controls for end-to-end verification with real key events.
     private func openInputTest() {
@@ -147,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         let toolsItem = NSMenuItem(title: L("工具"), action: nil, keyEquivalent: ""); menu.addItem(toolsItem)
         let toolsMenu = NSMenu(title: L("工具")); toolsItem.submenu = toolsMenu
         toolsMenu.addItem(withTitle: L("快捷面板"), action: #selector(togglePopover), keyEquivalent: "").target = self
+        toolsMenu.addItem(withTitle: L("待办清单"), action: #selector(openTodos), keyEquivalent: "").target = self
         toolsMenu.addItem(withTitle: L("颜色面板"), action: #selector(openColors), keyEquivalent: "").target = self
         let pickItem = toolsMenu.addItem(withTitle: L("拾取屏幕颜色…"), action: #selector(pickColor), keyEquivalent: "p")
         pickItem.keyEquivalentModifierMask = [.command, .shift]; pickItem.target = self
@@ -164,13 +169,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         else { togglePopover() }
     }
     @objc private func togglePopover() {
-        guard let button = statusItem.button else { return }
         if popover.isShown { popover.performClose(nil); return }
+        showPopover()
+    }
+    private func showPopover(selecting tool: QuickTool? = nil) {
+        guard let button = statusItem.button, !popover.isShown else { return }
+        AppSettings.shared.quickPanel.beginPresentation(selecting: tool)
         let store = StatsStore(); popoverStore = store
         let visibleFrame = (button.window?.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 700)
         let size = QuickToolsPopoverView.contentSize(in: visibleFrame)
         let controller = NSHostingController(rootView:
-            QuickToolsPopoverView(store: store, settings: AppSettings.shared, colors: colors, scroll: scroll, awake: awake, size: size,
+            QuickToolsPopoverView(store: store, settings: AppSettings.shared, quickPanel: AppSettings.shared.quickPanel,
+                todos: todos, colors: colors, scroll: scroll, awake: awake, size: size,
                 onPickColor: { [weak self] in self?.pickColor() },
                 onOpenSettings: { [weak self] in self?.openSettings() }, onOpenTools: { [weak self] tool in
                     self?.model.selection = tool; self?.showTools()
@@ -199,6 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         awake.expireIfNeeded()
         let menu = NSMenu(); menu.delegate = self
         menu.addItem(withTitle: L("打开 MacToys"), action: #selector(showTools), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("待办清单"), action: #selector(openTodos), keyEquivalent: "").target = self
         menu.addItem(withTitle: L("端口转发"), action: #selector(openPorts), keyEquivalent: "").target = self
         menu.addItem(withTitle: L("拾取屏幕颜色…"), action: #selector(pickColor), keyEquivalent: "").target = self
         menu.addItem(withTitle: L("颜色面板"), action: #selector(openColors), keyEquivalent: "").target = self
@@ -217,6 +228,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
     func menuDidClose(_ menu: NSMenu) { statusItem.menu = nil }
     @objc private func togglePaused() { AppSettings.shared.paused.toggle() }
     @objc private func openSettings() { model.selection = .settings; showTools() }
+    @objc private func openTodos() { model.selection = .todo; showTools() }
     @objc private func openPorts() { model.selection = .ports; showTools() }
     @objc private func openColors() { model.selection = .colors; showTools() }
     @objc private func openScroll() { model.selection = .scroll; showTools() }
@@ -246,9 +258,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
                 // NSColorSampler is still dismissing its overlay during its callback.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     if restoreWindow { self.model.visible = true; self.window?.orderFront(nil) }
-                    AppSettings.shared.quickTool = .colors
                     NSApp.activate(ignoringOtherApps: true)
-                    if !self.popover.isShown { self.togglePopover() }
+                    if AppSettings.shared.quickPanel.configuration.tools.contains(.colors) { self.showPopover(selecting: .colors) }
+                    else { self.openColors() }
                 }
             } else if self.colors.errorMessage != nil || (picked && self.colors.showAfterPicking) { self.openColors() }
             else {
@@ -270,7 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
                 styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             value.title = "MacToys"
             value.contentViewController = NSHostingController(rootView: ToolsView(model: model, settings: AppSettings.shared,
-                colors: colors, scroll: scroll, awake: awake, onPickColor: { [weak self] in self?.pickColor() }))
+                todos: todos, colors: colors, scroll: scroll, awake: awake, onPickColor: { [weak self] in self?.pickColor() }))
             value.minSize = NSSize(width: 920, height: 690)
             value.isReleasedWhenClosed = false; value.delegate = self
             value.setFrameAutosaveName(isTest ? "MacToysTestWindow" : "MacToysMainWindow")

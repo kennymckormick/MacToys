@@ -1,10 +1,9 @@
 import SwiftUI
 
-enum QuickTool: String, CaseIterable, Identifiable {
-    case input, colors, scroll, awake
-    var id: String { rawValue }
+extension QuickTool {
     var title: String {
         switch self {
+        case .todo: return L("待办")
         case .input: return L("统计")
         case .colors: return L("取色")
         case .scroll: return L("滚轮")
@@ -12,7 +11,7 @@ enum QuickTool: String, CaseIterable, Identifiable {
         }
     }
     var tool: ToolsModel.Tool {
-        switch self { case .input: return .input; case .colors: return .colors; case .scroll: return .scroll; case .awake: return .awake }
+        switch self { case .todo: return .todo; case .input: return .input; case .colors: return .colors; case .scroll: return .scroll; case .awake: return .awake }
     }
 }
 
@@ -24,6 +23,8 @@ private struct QuickContentHeightKey: PreferenceKey {
 struct QuickToolsPopoverView: View {
     @ObservedObject var store: StatsStore
     @ObservedObject var settings: AppSettings
+    @ObservedObject var quickPanel: QuickPanelSettings
+    @ObservedObject var todos: TodoStore
     @ObservedObject var colors: ColorPickerStore
     @ObservedObject var scroll: ScrollReversalStore
     @ObservedObject var awake: KeepAwakeStore
@@ -59,14 +60,15 @@ struct QuickToolsPopoverView: View {
                         .menuStyle(.borderlessButton).fixedSize().help(L("语言 / Language"))
                         .accessibilityLabel(L("语言 / Language"))
                 }.padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 10)
-                Picker(L("快捷工具"), selection: $settings.quickTool) {
-                    ForEach(QuickTool.allCases) { tab in
+                Picker(L("快捷工具"), selection: Binding(get: { quickPanel.selection }, set: quickPanel.select)) {
+                    ForEach(quickPanel.configuration.tools) { tab in
                         Label(tab.title, systemImage: tab.tool.symbol).tag(tab)
                     }
                 }.id(language.code).pickerStyle(.segmented).labelsHidden().controlSize(.regular)
                     .padding(.horizontal, 14).padding(.bottom, 8)
                 Group {
-                    switch settings.quickTool {
+                    switch quickPanel.selection {
+                    case .todo: TodoView(store: todos, compact: true)
                     case .input: StatsView(store: store, settings: settings, compact: true, onOpenSettings: onOpenSettings)
                     case .colors: QuickColorPickerView(store: colors, onPick: onPickColor)
                     case .scroll: ScrollReversalView(store: scroll, compact: true)
@@ -77,16 +79,16 @@ struct QuickToolsPopoverView: View {
                 HStack {
                     Button { onOpenTools(.ports) } label: { Label(L("端口转发"), systemImage: "arrow.left.arrow.right") }
                     Spacer()
-                    Button { onOpenTools(settings.quickTool.tool) } label: { Label(L("打开主窗口"), systemImage: "arrow.up.right.square") }
+                    Button { onOpenTools(quickPanel.selection.tool) } label: { Label(L("打开主窗口"), systemImage: "arrow.up.right.square") }
                     Button(action: onOpenSettings) { Image(systemName: "gearshape").frame(width: 24, height: 24) }
-                        .help(L("设置")).accessibilityLabel(L("设置"))
+                        .help(L("设置与小菜单配置")).accessibilityLabel(L("设置与小菜单配置"))
                 }.buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
                     .padding(.horizontal, 14).padding(.vertical, 8)
             }
             .fixedSize(horizontal: false, vertical: true)
             .background(GeometryReader { proxy in Color.clear.preference(key: QuickContentHeightKey.self, value: proxy.size.height) })
         }
-        .id(settings.quickTool)
+        .id(quickPanel.selection)
         .defaultScrollAnchor(.top)
         .scrollBounceBehavior(.basedOnSize)
         .frame(width: size.width, height: min(size.height, contentHeight), alignment: .topLeading)
