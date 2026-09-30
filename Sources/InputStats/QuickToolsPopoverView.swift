@@ -76,9 +76,8 @@ struct QuickToolsPopoverView: View {
                 }
                 Divider().padding(.horizontal, 12)
                 HStack {
-                    Button { onOpenTools(.ports) } label: { Label(L("端口转发"), systemImage: "arrow.left.arrow.right") }
-                    Spacer()
                     Button { onOpenTools(quickPanel.selection.tool) } label: { Label(L("打开主窗口"), systemImage: "arrow.up.right.square") }
+                    Spacer()
                     Button(action: onOpenSettings) { Image(systemName: "gearshape").frame(width: 22, height: 22) }
                         .help(L("设置与小菜单配置")).accessibilityLabel(L("设置与小菜单配置"))
                 }.buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
