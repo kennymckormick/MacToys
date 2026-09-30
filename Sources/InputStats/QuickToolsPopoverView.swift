@@ -44,14 +44,19 @@ struct QuickToolsPopoverView: View {
     var body: some View {
         ScrollView(.vertical) {
             VStack(spacing: 0) {
-                HStack(spacing: 7) {
+                HStack(spacing: 8) {
                     Image(systemName: "wrench.and.screwdriver.fill").foregroundStyle(.secondary)
-                    Text("MacToys").font(.system(size: 12, weight: .semibold))
+                        .help(L("MacToys 工具箱")).accessibilityLabel(L("MacToys 工具箱"))
+                    Picker(L("快捷工具"), selection: Binding(get: { quickPanel.selection }, set: quickPanel.select)) {
+                        ForEach(quickPanel.configuration.tools) { tab in
+                            Label(tab.title, systemImage: tab.tool.symbol).tag(tab)
+                        }
+                    }.id(language.code).pickerStyle(.segmented).labelsHidden().controlSize(.small)
+                        .frame(maxWidth: .infinity)
                     if awake.enabled {
                         Image(systemName: "cup.and.saucer.fill").foregroundStyle(.green)
                             .help(L("防止休眠已开启")).accessibilityLabel(L("防止休眠已开启"))
                     }
-                    Spacer()
                     Menu {
                         Picker(L("语言"), selection: $language.language) {
                             ForEach(AppLanguage.allCases) { Text($0.label).tag($0) }
@@ -59,13 +64,7 @@ struct QuickToolsPopoverView: View {
                     } label: { Image(systemName: "globe") }
                         .menuStyle(.borderlessButton).fixedSize().help(L("语言 / Language"))
                         .accessibilityLabel(L("语言 / Language"))
-                }.padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 10)
-                Picker(L("快捷工具"), selection: Binding(get: { quickPanel.selection }, set: quickPanel.select)) {
-                    ForEach(quickPanel.configuration.tools) { tab in
-                        Label(tab.title, systemImage: tab.tool.symbol).tag(tab)
-                    }
-                }.id(language.code).pickerStyle(.segmented).labelsHidden().controlSize(.regular)
-                    .padding(.horizontal, 14).padding(.bottom, 8)
+                }.padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 4)
                 Group {
                     switch quickPanel.selection {
                     case .todo: TodoView(store: todos, compact: true)
@@ -75,15 +74,15 @@ struct QuickToolsPopoverView: View {
                     case .awake: KeepAwakeView(store: awake, compact: true)
                     }
                 }
-                Divider().padding(.horizontal, 14)
+                Divider().padding(.horizontal, 12)
                 HStack {
                     Button { onOpenTools(.ports) } label: { Label(L("端口转发"), systemImage: "arrow.left.arrow.right") }
                     Spacer()
                     Button { onOpenTools(quickPanel.selection.tool) } label: { Label(L("打开主窗口"), systemImage: "arrow.up.right.square") }
-                    Button(action: onOpenSettings) { Image(systemName: "gearshape").frame(width: 24, height: 24) }
+                    Button(action: onOpenSettings) { Image(systemName: "gearshape").frame(width: 22, height: 22) }
                         .help(L("设置与小菜单配置")).accessibilityLabel(L("设置与小菜单配置"))
                 }.buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .padding(.horizontal, 12).padding(.vertical, 5)
             }
             .fixedSize(horizontal: false, vertical: true)
             .background(GeometryReader { proxy in Color.clear.preference(key: QuickContentHeightKey.self, value: proxy.size.height) })

@@ -11,7 +11,7 @@ struct StatsView: View {
     var onOpenSettings: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 12 : 24) {
+        VStack(alignment: .leading, spacing: compact ? 8 : 24) {
             if compact {
                 compactHeader
             } else {
@@ -89,7 +89,8 @@ struct StatsView: View {
                 }
             }
         }
-        .padding(compact ? 14 : 30)
+        .padding(.horizontal, compact ? 12 : 30)
+        .padding(.vertical, compact ? 8 : 30)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .environment(\.locale, language.locale)
         .onAppear { store.activate() }
@@ -143,23 +144,24 @@ struct StatsView: View {
     private var summary: some View {
         let keyboard = max(0, store.points.reduce(0) { $0 + (store.metric == .chars ? $1.keyboardChars : $1.keyboardWords) })
         let voice = max(0, store.points.reduce(0) { $0 + (store.metric == .chars ? $1.voiceChars : $1.voiceWords) })
-        return HStack(spacing: compact ? 8 : 16) {
+        return HStack(spacing: compact ? 6 : 16) {
             stat(L("键盘"), keyboard, "keyboard", .blue)
             stat(L("语音"), voice, "waveform", .green)
             stat(L("合计"), keyboard + voice, "sum", .primary)
         }
     }
     private func stat(_ title: String, _ value: Int, _ symbol: String, _ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: compact ? 5 : 12) {
-            Label(title, systemImage: symbol).font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: compact ? 1 : 12) {
+            Label(title, systemImage: symbol).font(compact ? .system(size: 10) : .caption).foregroundStyle(.secondary)
             Text(value.formatted(.number.grouping(.automatic)))
-                .font(.system(size: compact ? 23 : 36, weight: .semibold, design: .rounded).monospacedDigit())
+                .font(.system(size: compact ? 20 : 36, weight: .semibold, design: .rounded).monospacedDigit())
                 .foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.35)
                 .allowsTightening(true).accessibilityLabel("\(title) \(value) \(store.metric == .chars ? L("字符") : L("单词"))")
                 .help("\(title)：\(value) \(store.metric == .chars ? L("字符") : L("单词"))")
             if !compact { Text(store.metric == .chars ? L("字符") : L("单词")).font(.caption2).foregroundStyle(.secondary) }
         }
-        .frame(maxWidth: .infinity, minHeight: compact ? 46 : 110, alignment: .leading).padding(compact ? 10 : 20)
+        .frame(maxWidth: .infinity, minHeight: compact ? 34 : 110, alignment: .leading)
+        .padding(.horizontal, compact ? 9 : 20).padding(.vertical, compact ? 6 : 20)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: compact ? 8 : 12))
     }
     private var chart: some View {
@@ -208,7 +210,7 @@ struct StatsView: View {
         }
         .chartLegend(position: .top, alignment: .trailing)
         .chartLegend(compact ? .hidden : .visible)
-        .frame(height: compact ? 144 : 260)
+        .frame(height: compact ? 100 : 260)
         .overlay {
             if maximum == 0 { Text(L("开始输入后，这里会显示统计趋势")).foregroundStyle(.secondary).font(.callout) }
         }
