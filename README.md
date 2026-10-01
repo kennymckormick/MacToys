@@ -2,11 +2,11 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-Todo lists, input statistics, port forwarding, screen color picking, mouse wheel reversal, and sleep prevention for macOS 14+.
+Todo lists, Markdown notes, long-term goals, input statistics, port forwarding, color picking, mouse wheel reversal, sleep prevention, and private GitHub backups for macOS 14+.
 
 ## Menu bar
 
-- Choose up to four tabs from Todo, Stats, Colors, Scroll, and Awake in Settings → Quick Panel.
+- Notes is pinned in the menu bar. Choose up to three more tabs from Todo, Goals, Stats, Colors, Scroll, and Awake in Settings → Quick Panel.
 - Set which tab opens each time you click the menu bar icon. Todo is the default.
 - Use English or Simplified Chinese, or follow the system language. Switch without restarting.
 
@@ -15,6 +15,28 @@ Todo lists, input statistics, port forwarding, screen color picking, mouse wheel
 - Add, edit, complete, and delete tasks from the menu bar or main window.
 - Expand completed tasks to restore them, or clear them together.
 - Tasks are shared between both views and saved locally across restarts.
+
+## Notes
+
+- Edit Markdown as formatted text, with headings, bold, italic, lists, checkboxes, quotes, code blocks, links, and tables.
+- Switch to Markdown source and export individual notes as `.md` files.
+- Keep multiple notes with titles. Changes save locally as you type, in both the menu bar and main window.
+- The editor runs offline. Remote images and embedded HTML do not load.
+
+## Long-term Goals
+
+- Keep a goal and its current status as two editable text fields.
+- Add, update, and delete goals from the main window or an optional Goals tab in the menu bar.
+- Goals persist until you delete them.
+
+## Cloud Sync
+
+- Manually back up tasks, notes, goals, input counts, saved colors, and preferences to a private GitHub repository.
+- Restore the snapshot on another Mac. A local backup is saved before every restore; data is replaced, not merged.
+- Authorize with a fine-grained access token stored in the macOS Keychain. No background polling.
+- Portman rules, SSH keys, system permissions, login items, and active Keep Awake sessions stay local.
+
+[Set up Cloud Sync](docs/cloud-sync.md)
 
 ## InputStats
 

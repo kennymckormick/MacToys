@@ -60,6 +60,14 @@ final class ColorPickerStore: ObservableObject {
             self?.cancelRecording()
         }
     }
+    func reloadPreferences() {
+        cancelRecording()
+        let restored = ColorPickerStore(defaults: defaults, pasteboard: pasteboard, sampler: runSampler)
+        selected = restored.selected; history = restored.history; favorites = restored.favorites
+        format = restored.format; autoCopy = restored.autoCopy; showAfterPicking = restored.showAfterPicking
+        shortcut = restored.shortcut; shortcutEnabled = restored.shortcutEnabled
+        message = nil; errorMessage = nil
+    }
     private func updateRegistration() {
         guard registration.action != nil else { return }
         guard shortcutEnabled, !isRecording else { registration.unregister(); shortcutError = nil; return }

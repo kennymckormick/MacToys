@@ -6,6 +6,7 @@ import Darwin
 
 @main
 struct InputStatsApp {
+    @MainActor
     static func main() {
         let args = CommandLine.arguments
         if args.count == 3 && args[1] == "--quit-running" {
@@ -23,6 +24,7 @@ struct InputStatsApp {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopoverDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
@@ -30,14 +32,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
     private var window: NSWindow?
     private var inputTestWindow: NSWindow?
     private let model = ToolsModel()
-    private let colors = ColorPickerStore()
-    private let scroll = ScrollReversalStore()
-    private let awake = KeepAwakeStore()
+    private lazy var colors = ColorPickerStore()
+    private lazy var scroll = ScrollReversalStore()
+    private lazy var awake = KeepAwakeStore()
     private lazy var todos = TodoStore(url: Database.directory.appendingPathComponent("todos.json"))
+    private lazy var notes = NotesStore(url: Database.directory.appendingPathComponent("notes.json"))
+    private lazy var goals = GoalStore(url: Database.directory.appendingPathComponent("goals.json"))
+    private var appDefaults: UserDefaults { isTest ? UserDefaults(suiteName: "com.local.inputstats.tests")! : .standard }
+    private lazy var localBackup = LocalBackupStore(directory: Database.directory, defaults: appDefaults,
+        readStatistics: { try Database.shared.buckets() }, replaceStatistics: { try Database.shared.replaceAll($0) })
+    private lazy var cloud = CloudSyncStore(defaults: appDefaults, backupsDirectory: localBackup.backupsDirectory,
+        capture: { [weak self] in
+            guard let self else { throw BackupError.invalid }
+            try await NotesEditorRegistry.shared.flushAll()
+            try self.notes.flush()
+            return try InputMonitor.shared.withSavedStorage { try self.localBackup.capture() }
+        }, restore: { [weak self] snapshot in
+            guard let self else { throw BackupError.invalid }
+            try await NotesEditorRegistry.shared.flushAll()
+            try self.notes.flush()
+            do {
+                let saved = try InputMonitor.shared.withSavedStorage(resetFocusAfter: true) { try self.localBackup.restore(snapshot) }
+                self.reloadAfterRestore(snapshot.preferences)
+                return saved
+            } catch {
+                if self.localBackup.requiresRecovery { self.haltForRecovery() }
+                throw error
+            }
+        })
     private var awakeStateToken: AnyCancellable?
     private var languageToken: NSObjectProtocol?
     private var lockFD: Int32 = -1
     private var ownsLock = false
+    private var recoveryBlocked = false
     private var reopenObserver: NSObjectProtocol?
     private var signalSources: [DispatchSourceSignal] = []
     private let isTest = ProcessInfo.processInfo.environment["INPUTSTATS_TEST_HOME"] != nil
@@ -50,8 +77,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
             NSApp.terminate(nil); return
         }
         ownsLock = true
+        do { try localBackup.recoverInterruptedRestore() }
+        catch {
+            haltForRecovery(); return
+        }
         if !isTest {
-            reopenObserver = DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.local.inputstats.show"), object: nil, queue: .main) { [weak self] _ in self?.showTools() }
+            reopenObserver = DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.local.inputstats.show"), object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.showTools() }
+            }
         }
         // Never automatically request/reset TCC. Reuse the existing signed app identity.
         InputMonitor.shared.start()
@@ -75,8 +108,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
             self?.updateStatusItem(awakeEnabled: enabled)
         }
         languageToken = NotificationCenter.default.addObserver(forName: .appLanguageDidChange, object: nil, queue: .main) { [weak self] _ in
-            self?.installMenu()
-            self?.updateStatusItem(awakeEnabled: self?.awake.enabled ?? false)
+            MainActor.assumeIsolated {
+                self?.installMenu()
+                self?.updateStatusItem(awakeEnabled: self?.awake.enabled ?? false)
+            }
         }
         popover.behavior = .transient; popover.delegate = self
         installMenu()
@@ -95,7 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
                 "awakeError": awake.issue ?? "", "language": Localization.shared.code,
                 "quickTools": AppSettings.shared.quickPanel.configuration.tools.map(\.rawValue),
                 "quickDefault": AppSettings.shared.quickPanel.configuration.preferred.rawValue,
-                "todoStorageReady": todos.canEdit]
+                "todoStorageReady": todos.canEdit, "goalStorageReady": goals.canEdit, "notesStorageReady": notes.canEdit]
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 FileHandle.standardOutput.write(data); FileHandle.standardOutput.write(Data("\n".utf8))
             }
@@ -152,6 +187,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         let toolsMenu = NSMenu(title: L("工具")); toolsItem.submenu = toolsMenu
         toolsMenu.addItem(withTitle: L("快捷面板"), action: #selector(togglePopover), keyEquivalent: "").target = self
         toolsMenu.addItem(withTitle: L("待办清单"), action: #selector(openTodos), keyEquivalent: "").target = self
+        toolsMenu.addItem(withTitle: L("笔记"), action: #selector(openNotes), keyEquivalent: "").target = self
+        toolsMenu.addItem(withTitle: L("长期目标"), action: #selector(openGoals), keyEquivalent: "").target = self
         toolsMenu.addItem(withTitle: L("颜色面板"), action: #selector(openColors), keyEquivalent: "").target = self
         let pickItem = toolsMenu.addItem(withTitle: L("拾取屏幕颜色…"), action: #selector(pickColor), keyEquivalent: "p")
         pickItem.keyEquivalentModifierMask = [.command, .shift]; pickItem.target = self
@@ -173,14 +210,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         showPopover()
     }
     private func showPopover(selecting tool: QuickTool? = nil) {
-        guard let button = statusItem.button, !popover.isShown else { return }
+        guard !recoveryBlocked, let button = statusItem.button, !popover.isShown else { return }
         AppSettings.shared.quickPanel.beginPresentation(selecting: tool)
         let store = StatsStore(); popoverStore = store
         let visibleFrame = (button.window?.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 700)
         let size = QuickToolsPopoverView.contentSize(in: visibleFrame)
         let controller = NSHostingController(rootView:
             QuickToolsPopoverView(store: store, settings: AppSettings.shared, quickPanel: AppSettings.shared.quickPanel,
-                todos: todos, colors: colors, scroll: scroll, awake: awake, size: size,
+                todos: todos, goals: goals, notes: notes, colors: colors, scroll: scroll, awake: awake, size: size,
                 onPickColor: { [weak self] in self?.pickColor() },
                 onOpenSettings: { [weak self] in self?.openSettings() }, onOpenTools: { [weak self] tool in
                     self?.model.selection = tool; self?.showTools()
@@ -210,6 +247,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         let menu = NSMenu(); menu.delegate = self
         menu.addItem(withTitle: L("打开 MacToys"), action: #selector(showTools), keyEquivalent: "").target = self
         menu.addItem(withTitle: L("待办清单"), action: #selector(openTodos), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("笔记"), action: #selector(openNotes), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L("长期目标"), action: #selector(openGoals), keyEquivalent: "").target = self
         menu.addItem(withTitle: L("端口转发"), action: #selector(openPorts), keyEquivalent: "").target = self
         menu.addItem(withTitle: L("拾取屏幕颜色…"), action: #selector(pickColor), keyEquivalent: "").target = self
         menu.addItem(withTitle: L("颜色面板"), action: #selector(openColors), keyEquivalent: "").target = self
@@ -229,6 +268,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
     @objc private func togglePaused() { AppSettings.shared.paused.toggle() }
     @objc private func openSettings() { model.selection = .settings; showTools() }
     @objc private func openTodos() { model.selection = .todo; showTools() }
+    @objc private func openNotes() { model.selection = .notes; showTools() }
+    @objc private func openGoals() { model.selection = .goals; showTools() }
     @objc private func openPorts() { model.selection = .ports; showTools() }
     @objc private func openColors() { model.selection = .colors; showTools() }
     @objc private func openScroll() { model.selection = .scroll; showTools() }
@@ -274,7 +315,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         }
     }
     @objc private func showTools() {
-        guard !colors.isSampling else { return }
+        guard !recoveryBlocked, !colors.isSampling else { return }
         popover.performClose(nil)
         model.visible = true
         if window == nil {
@@ -282,7 +323,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
                 styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             value.title = "MacToys"
             value.contentViewController = NSHostingController(rootView: ToolsView(model: model, settings: AppSettings.shared,
-                todos: todos, colors: colors, scroll: scroll, awake: awake, onPickColor: { [weak self] in self?.pickColor() }))
+                todos: todos, goals: goals, notes: notes, sync: cloud, colors: colors, scroll: scroll, awake: awake, onPickColor: { [weak self] in self?.pickColor() }))
             value.minSize = NSSize(width: 920, height: 690)
             value.isReleasedWhenClosed = false; value.delegate = self
             value.setFrameAutosaveName(isTest ? "MacToysTestWindow" : "MacToysMainWindow")
@@ -293,6 +334,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         window?.deminiaturize(nil); window?.makeKeyAndOrderFront(nil)
     }
     func windowWillClose(_ notification: Notification) { model.visible = false; NSApp.setActivationPolicy(.accessory) }
+    private func haltForRecovery() {
+        recoveryBlocked = true
+        InputMonitor.shared.stop(savePending: false)
+        popover.performClose(nil); window?.close()
+        let alert = NSAlert(); alert.messageText = L("本地数据恢复未完成")
+        alert.informativeText = L("请检查数据文件夹中的 sync-rollback.json 与 SyncBackups。为保留原数据，本次不会继续写入。")
+        alert.runModal()
+        NSApp.terminate(nil)
+    }
+    private func reloadAfterRestore(_ preferences: BackupPreferences) {
+        todos.reload(); goals.reload(); notes.reload()
+        AppSettings.shared.reloadPreferences()
+        Localization.shared.language = AppLanguage(rawValue: preferences.language) ?? .system
+        colors.reloadPreferences()
+        scroll.reverseVertical = preferences.scrollVertical
+        scroll.reverseHorizontal = preferences.scrollHorizontal
+        scroll.enabled = preferences.scrollEnabled
+        awake.setEnabled(false)
+        awake.setDuration(AwakeDuration(rawValue: preferences.awakeDuration) ?? .untilOff)
+        awake.setKeepDisplayAwake(preferences.awakeDisplay)
+        NotificationCenter.default.post(name: .statsDidReset, object: nil)
+    }
     func windowDidMiniaturize(_ notification: Notification) { model.visible = false }
     func windowDidDeminiaturize(_ notification: Notification) { model.visible = true }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -302,13 +365,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         return true
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard ownsLock else { return .terminateNow }
-        InputMonitor.shared.prepareForTermination { error in
-            if let error {
+        guard ownsLock, !recoveryBlocked else { return .terminateNow }
+        Task {
+            do { try await NotesEditorRegistry.shared.flushAll(); try notes.flush() }
+            catch {
                 sender.reply(toApplicationShouldTerminate: false)
-                let alert = NSAlert(); alert.messageText = L("统计尚未保存，已取消退出")
-                alert.informativeText = Database.errorDescription(error); alert.runModal()
-            } else { sender.reply(toApplicationShouldTerminate: true) }
+                let alert = NSAlert(); alert.messageText = L("笔记尚未保存，已取消退出")
+                alert.informativeText = notes.errorMessage ?? error.localizedDescription; alert.runModal()
+                return
+            }
+            InputMonitor.shared.prepareForTermination { error in
+                if let error {
+                    sender.reply(toApplicationShouldTerminate: false)
+                    let alert = NSAlert(); alert.messageText = L("统计尚未保存，已取消退出")
+                    alert.informativeText = Database.errorDescription(error); alert.runModal()
+                } else { sender.reply(toApplicationShouldTerminate: true) }
+            }
         }
         return .terminateLater
     }
@@ -316,7 +388,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         if ownsLock {
             scroll.stop()
             awake.stop()
-            if !isTest || ProcessInfo.processInfo.environment["INPUTSTATS_ENABLE_TEST_MONITOR"] == "1" { InputMonitor.shared.stop() }
+            if !recoveryBlocked && (!isTest || ProcessInfo.processInfo.environment["INPUTSTATS_ENABLE_TEST_MONITOR"] == "1") { InputMonitor.shared.stop() }
             flock(lockFD, LOCK_UN); Darwin.close(lockFD)
         }
     }

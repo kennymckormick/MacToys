@@ -1,5 +1,14 @@
 # 版本记录
 
+## 0.7.0
+
+- Add offline WYSIWYG Markdown notes, local autosave, source editing, and Markdown export. Notes is pinned in the Quick Panel, preserving the previous preferred tab.
+
+- 新增长期目标：目标与当前状态两个文本字段，在主窗口和可选的小菜单页签中使用。
+- 新增 GitHub 私有仓库手动备份与恢复，细粒度令牌保存在本机钥匙串。
+- 同步待办、目标、笔记、输入统计、颜色和应用偏好；恢复前自动备份，检查数据格式和云端版本，支持中断后的回滚。
+- 补充英文与中文界面，以及长期目标、存储恢复和 GitHub API 自动检查。
+
 ## 0.4.0
 
 - 新增防止休眠：持续开启或定时 15 分钟、30 分钟、1 / 2 / 4 小时，可独立选择屏幕常亮。

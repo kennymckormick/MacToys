@@ -2,14 +2,14 @@ import Foundation
 import Combine
 
 enum QuickTool: String, CaseIterable, Identifiable {
-    case todo, input, colors, scroll, awake
+    case todo, notes, goals, input, colors, scroll, awake
     var id: String { rawValue }
 }
 
 /// Stores the list and its default together so the default always belongs to the list.
 final class QuickPanelSettings: ObservableObject {
     static let limit = 4
-    static let defaultTools: [QuickTool] = [.todo, .input, .colors, .awake]
+    static let defaultTools: [QuickTool] = [.todo, .notes, .input, .colors]
     private static let key = "quickPanel.configuration"
     struct Configuration: Equatable {
         let tools: [QuickTool]
@@ -28,6 +28,11 @@ final class QuickPanelSettings: ObservableObject {
         }
         if tools.isEmpty { tools = Self.defaultTools }
         let preferred = (saved?["preferred"] as? String).flatMap(QuickTool.init(rawValue:)) ?? .todo
+        // Notes is always pinned. Preserve the user's preferred tool when migrating a full panel.
+        if !tools.contains(.notes) {
+            if tools.count == Self.limit, let index = tools.lastIndex(where: { $0 != preferred }) { tools.remove(at: index) }
+            tools.insert(.notes, at: min(tools.firstIndex(of: .todo).map { $0 + 1 } ?? tools.count, tools.count))
+        }
         let configuration = Configuration(tools: tools, preferred: tools.contains(preferred) ? preferred : tools[0])
         self.configuration = configuration
         selection = configuration.preferred
@@ -50,6 +55,7 @@ final class QuickPanelSettings: ObservableObject {
             guard tools.count < Self.limit else { return false }
             tools.append(tool)
         } else {
+            if tool == .notes { return false }
             if !tools.contains(tool) { return true }
             guard tools.count > 1 else { return false }
             tools.removeAll { $0 == tool }
@@ -65,6 +71,12 @@ final class QuickPanelSettings: ObservableObject {
         guard configuration.tools.contains(tool) else { return }
         configuration = Configuration(tools: configuration.tools, preferred: tool)
         persist()
+    }
+
+    func reload() {
+        let restored = QuickPanelSettings(defaults: defaults)
+        configuration = restored.configuration
+        selection = configuration.preferred
     }
 
     private func persist() {

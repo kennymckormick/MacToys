@@ -11,7 +11,7 @@ struct TodoItem: Codable, Identifiable, Equatable {
 
 /// One store is shared by both windows. Only explicit edits write to disk; there is no polling.
 final class TodoStore: ObservableObject {
-    private struct Document: Codable {
+    struct Document: Codable {
         var version = 1
         let items: [TodoItem]
     }
@@ -27,17 +27,26 @@ final class TodoStore: ObservableObject {
         reload()
     }
 
+    static func validate(_ items: [TodoItem]) throws {
+        guard items.count <= 100_000, Set(items.map(\.id)).count == items.count,
+              items.allSatisfy({ !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                  $0.title.utf8.count <= 65_536 && $0.createdAt.timeIntervalSince1970.isFinite &&
+                  ($0.completedAt?.timeIntervalSince1970.isFinite ?? true) }) else { throw FileError.invalidDocument }
+    }
+
+    static func read(from url: URL) throws -> [TodoItem] {
+        let data: Data
+        do { data = try Data(contentsOf: url) }
+        catch CocoaError.fileReadNoSuchFile { return [] }
+        let document = try JSONDecoder().decode(Document.self, from: data)
+        guard document.version == 1 else { throw FileError.invalidDocument }
+        try validate(document.items)
+        return document.items
+    }
+
     func reload() {
         do {
-            let document: Document
-            do { document = try JSONDecoder().decode(Document.self, from: Data(contentsOf: url)) }
-            catch CocoaError.fileReadNoSuchFile { document = Document(items: []) }
-            guard document.version == 1,
-                  Set(document.items.map(\.id)).count == document.items.count,
-                  document.items.allSatisfy({ !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
-                throw FileError.invalidDocument
-            }
-            items = document.items
+            items = try Self.read(from: url)
             canEdit = true
             errorMessage = nil
         } catch {
@@ -76,6 +85,7 @@ final class TodoStore: ObservableObject {
         guard canEdit else { return false }
         if updated == items { return true }
         do {
+            try Self.validate(updated)
             let data = try JSONEncoder().encode(Document(items: updated))
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: url, options: .atomic)

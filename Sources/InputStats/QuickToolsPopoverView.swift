@@ -4,6 +4,8 @@ extension QuickTool {
     var title: String {
         switch self {
         case .todo: return L("待办")
+        case .notes: return L("笔记")
+        case .goals: return L("目标")
         case .input: return L("统计")
         case .colors: return L("取色")
         case .scroll: return L("滚轮")
@@ -11,7 +13,7 @@ extension QuickTool {
         }
     }
     var tool: ToolsModel.Tool {
-        switch self { case .todo: return .todo; case .input: return .input; case .colors: return .colors; case .scroll: return .scroll; case .awake: return .awake }
+        switch self { case .todo: return .todo; case .notes: return .notes; case .goals: return .goals; case .input: return .input; case .colors: return .colors; case .scroll: return .scroll; case .awake: return .awake }
     }
 }
 
@@ -25,6 +27,8 @@ struct QuickToolsPopoverView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var quickPanel: QuickPanelSettings
     @ObservedObject var todos: TodoStore
+    @ObservedObject var goals: GoalStore
+    @ObservedObject var notes: NotesStore
     @ObservedObject var colors: ColorPickerStore
     @ObservedObject var scroll: ScrollReversalStore
     @ObservedObject var awake: KeepAwakeStore
@@ -68,6 +72,8 @@ struct QuickToolsPopoverView: View {
                 Group {
                     switch quickPanel.selection {
                     case .todo: TodoView(store: todos, compact: true)
+                    case .notes: NotesView(store: notes, compact: true)
+                    case .goals: GoalView(store: goals, compact: true)
                     case .input: StatsView(store: store, settings: settings, compact: true, onOpenSettings: onOpenSettings)
                     case .colors: QuickColorPickerView(store: colors, onPick: onPickColor)
                     case .scroll: ScrollReversalView(store: scroll, compact: true)

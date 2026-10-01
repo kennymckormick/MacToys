@@ -22,6 +22,14 @@ jobs:
         run: bash scripts/check-keep-awake.sh
       - name: Todo and Quick Panel checks
         run: bash scripts/check-todos.sh
+      - name: Long-term goal checks
+        run: bash scripts/check-goals.sh
+      - name: Notes storage checks
+        run: bash scripts/check-notes.sh
+      - name: Offline Markdown editor checks
+        run: bash scripts/check-notes-editor.sh
+      - name: Cloud backup, restore, and GitHub API checks
+        run: bash scripts/check-cloud-sync.sh
       - name: Language and translation checks
         run: bash scripts/check-localization.sh
       - name: Portman TCP and API checks

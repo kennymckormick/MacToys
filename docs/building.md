@@ -59,6 +59,12 @@ swift run -c release --scratch-path .build-mactoys SelfCheck
 bash scripts/check-color-picker.sh
 bash scripts/check-scroll-reversal.sh
 bash scripts/check-keep-awake.sh
+bash scripts/check-todos.sh
+bash scripts/check-goals.sh
+bash scripts/check-notes.sh
+bash scripts/check-notes-editor.sh
+bash scripts/check-cloud-sync.sh
+bash scripts/check-localization.sh
 (cd Modules/Portman && python3 -m unittest discover -s tests -v)
 node --check Modules/Portman/portman/static/app.js
 ```
@@ -67,6 +73,18 @@ node --check Modules/Portman/portman/static/app.js
 
 The installer saves a backup before replacing an existing app. Backups are stored in `~/Library/Application Support/MacToys/Backups/`. Test output, app bundles, databases, and signing keys are excluded from version control.
 
+## Notes editor
+
+The offline editor bundle is committed in `Resources/NotesEditor`; a normal app build does not need npm or a network connection. To rebuild it after editing `Modules/NotesEditor`:
+
+```sh
+cd Modules/NotesEditor
+npm ci --ignore-scripts
+npm run build
+```
+
+Use Node.js 22, 24, or 26+. Dependencies are pinned in the lockfile. The build includes the licenses of all bundled dependencies in `THIRD-PARTY-NOTICES.txt`. `check-notes-editor.sh` runs the actual editor in an offscreen WebKit view with temporary notes; it does not send keyboard events to other apps.
+
 ## Source layout
 
 | Directory | Contents |
@@ -74,6 +92,7 @@ The installer saves a backup before replacing an existing app. Backups are store
 | `Sources/InputStatsCore` | Counting, Fn state machine, time aggregation, color formats |
 | `Sources/InputStatsStorage` | SQLite transactions, historical migration, failure recovery |
 | `Sources/InputStats` | Native app, input monitoring, statistics, color picker, WebKit integration |
+| `Modules/NotesEditor` | Offline Milkdown editor source and reproducible bundle build |
 | `Modules/Portman` | Python CLI, daemon, web GUI, integration tests |
 | `scripts` | Build, installation, icons, verification tools |
 

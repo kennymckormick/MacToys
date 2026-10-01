@@ -29,6 +29,14 @@ final class AppSettings: ObservableObject {
     }
     private func save(_ value: Any, _ key: String) { defaults.set(value, forKey: key) }
     private func changed() { NotificationCenter.default.post(name: .monitorSettingsDidChange, object: nil) }
+    func reloadPreferences() {
+        use24Hour = defaults.object(forKey: "use24Hour") as? Bool ?? true
+        weekDays = defaults.object(forKey: "weekDays") as? Int ?? 7
+        paused = defaults.bool(forKey: "paused")
+        includePaste = defaults.bool(forKey: "includePaste")
+        sourceMode = defaults.string(forKey: "sourceMode") ?? "auto"
+        quickPanel.reload()
+    }
     func setLaunchAtLogin(_ enabled: Bool) {
         do {
             if enabled { try SMAppService.mainApp.register() }

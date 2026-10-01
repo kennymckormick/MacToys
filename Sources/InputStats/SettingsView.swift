@@ -20,12 +20,12 @@ struct SettingsView: View {
                     Toggle(isOn: Binding(get: { quickPanel.configuration.tools.contains(tool) }, set: { quickPanel.setIncluded($0, tool: tool) })) {
                         Label(tool.tool.title, systemImage: tool.tool.symbol)
                     }
-                    .disabled(included ? quickPanel.configuration.tools.count == 1 : quickPanel.configuration.tools.count == QuickPanelSettings.limit)
+                    .disabled(tool == .notes || (!included && quickPanel.configuration.tools.count == QuickPanelSettings.limit))
                 }
                 Picker(L("默认打开"), selection: Binding(get: { quickPanel.configuration.preferred }, set: quickPanel.setPreferred)) {
                     ForEach(quickPanel.configuration.tools) { Text($0.tool.title).tag($0) }
                 }.id(language.code)
-                Text(L("选择 1–4 个功能。每次点击菜单栏图标时，打开默认页签；其他功能仍可在主窗口使用。"))
+                Text(L("笔记固定在小菜单中，可再添加最多 3 个功能。每次打开默认页签；其他功能仍可在主窗口使用。"))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(L("通用")) {
@@ -51,7 +51,7 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(L("本机数据")) {
-                Text(L("输入统计只保存计数，不记录输入原文。待办清单单独保存在本机，清空统计不会删除待办。"))
+                Text(L("输入统计只保存计数，不记录输入原文。待办、长期目标和笔记独立保存，清空统计不会删除它们。可在云端同步中手动备份。"))
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Text(L("导出每日统计"))

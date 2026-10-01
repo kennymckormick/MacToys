@@ -350,6 +350,17 @@ final class InputMonitor {
             }
         }
     }
+    /// Serialize a manual backup/restore with buffered input so counts cannot arrive midway through it.
+    func withSavedStorage<T>(resetFocusAfter: Bool = false, _ operation: () throws -> T) throws -> T {
+        try queue.sync {
+            if !pending.isEmpty {
+                try Database.shared.add(Array(pending.values))
+                pending.removeAll()
+            }
+            defer { if resetFocusAfter { resetFocus() } }
+            return try operation()
+        }
+    }
     func resetAll(completion: @escaping (Error?) -> Void) {
         queue.async {
             do {
@@ -377,14 +388,18 @@ final class InputMonitor {
             }
         }
     }
-    func stop() {
+    func stop(savePending: Bool = true) {
         if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
         if let tapSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), tapSource, .commonModes) }
         tap = nil; tapSource = nil
         queue.sync {
-            self.sample(); stopping = true
+            if savePending { self.sample() }
+            stopping = true
             sampleWork?.cancel(); voiceWork?.cancel(); flushWork?.cancel()
-            removeObserver(); flush(); resetFocus()
+            removeObserver()
+            if savePending { flush() }
+            else { pending.removeAll() }
+            resetFocus()
             // A failed final save is recoverable on next launch, with no typed text on disk.
             if !pending.isEmpty, let data = try? JSONEncoder().encode(Database.Recovery(id: UUID().uuidString, buckets: Array(pending.values))) {
                 try? data.write(to: Database.directory.appendingPathComponent("unsaved-counts.json"), options: .atomic)

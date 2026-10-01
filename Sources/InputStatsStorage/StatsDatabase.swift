@@ -115,4 +115,25 @@ public final class StatsDatabase {
     }
 
     public func clearAll() throws { try queue.sync { try exec("DELETE FROM minute_stats;") } }
+
+    /// Restore exact counts (including legacy corrections), never add a second copy of a backup.
+    public func replaceAll(_ buckets: [MinuteBucket]) throws {
+        guard Set(buckets.map(\.start)).count == buckets.count else { throw StorageError.sqlite("Duplicate minute buckets") }
+        try queue.sync {
+            try exec("BEGIN IMMEDIATE;")
+            do {
+                try exec("DELETE FROM minute_stats;")
+                let statement = try prepare("INSERT INTO minute_stats (bucket_start, keyboard_chars, keyboard_words, voice_chars, voice_words) VALUES (?, ?, ?, ?, ?);")
+                defer { sqlite3_finalize(statement) }
+                for bucket in buckets {
+                    sqlite3_reset(statement)
+                    for (index, value) in [bucket.start, bucket.keyboardChars, bucket.keyboardWords, bucket.voiceChars, bucket.voiceWords].enumerated() {
+                        sqlite3_bind_int64(statement, Int32(index + 1), sqlite3_int64(value))
+                    }
+                    guard sqlite3_step(statement) == SQLITE_DONE else { throw fail() }
+                }
+                try exec("COMMIT;")
+            } catch { try? exec("ROLLBACK;"); throw error }
+        }
+    }
 }

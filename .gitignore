@@ -9,6 +9,7 @@ __pycache__/
 *.egg-info/
 .venv/
 .swiftpm/
+node_modules/
 dist/
 .env
 .env.*

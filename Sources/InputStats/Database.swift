@@ -35,4 +35,5 @@ final class Database {
     func add(_ buckets: [MinuteBucket]) throws { try storage.get().add(buckets) }
     func buckets(from: Int = 0, to: Int = Int.max) throws -> [MinuteBucket] { try storage.get().buckets(from: from, to: to) }
     func clearAll() throws { try storage.get().clearAll() }
+    func replaceAll(_ buckets: [MinuteBucket]) throws { try storage.get().replaceAll(buckets) }
 }
