@@ -2,7 +2,7 @@
 
 [English README](../README.md) · [中文 README](../README.zh-CN.md)
 
-Releases currently contain source code. A Developer ID-signed, notarized download is not available yet.
+Releases include self-contained DMGs for Apple Silicon and Intel. These are ad-hoc signed, **not notarized**. See [installation](installing.md) for the first-open steps, or [release packaging](releasing.md) to build a DMG. The instructions below are for source builds.
 
 ## Requirements
 
@@ -35,11 +35,11 @@ SIGNING_IDENTITY='Your code-signing identity' ./build.sh --install
 
 Keep the same identity across installed updates. Ad-hoc signatures do not provide a stable permission identity across builds. The installer stops if the new app's designated signing requirement differs from the installed app's. Certificates and private keys are not included in the repository.
 
-This script is for local builds. Developer ID distribution needs a separate signing and packaging flow with hardened runtime, a secure timestamp, notarization, and a stapled ticket. A self-contained download also needs a bundled Portman runtime.
+This script is for local builds. `scripts/release.py` builds self-contained, ad-hoc signed downloads separately without touching the installed app. Developer ID distribution still needs hardened runtime, a secure timestamp, notarization, and a stapled ticket.
 
 ## Portman CLI
 
-Portman source is included in the repository and app bundle. The app reuses an installed `portman` CLI when available; otherwise it launches the bundled module with an external Python interpreter. A standalone Python runtime is not bundled yet.
+Portman source is included in the repository and app bundle. Source builds reuse an installed `portman` CLI when available; otherwise they launch the bundled module with an external Python interpreter. Release DMGs always use their bundled CLI and Python runtime; an existing Portman daemon and saved mappings are reused. No Python installation is needed for the DMG.
 
 To install the CLI separately:
 
@@ -65,6 +65,7 @@ bash scripts/check-notes.sh
 bash scripts/check-notes-editor.sh
 bash scripts/check-cloud-sync.sh
 bash scripts/check-localization.sh
+bash scripts/check-release-setup.sh
 (cd Modules/Portman && python3 -m unittest discover -s tests -v)
 node --check Modules/Portman/portman/static/app.js
 ```

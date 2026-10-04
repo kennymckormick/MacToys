@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from portman.common import PortmanError, endpoint, validate_spec
+from portman.common import PortmanError, endpoint, validate_spec, python_command
 
 
 def free_port(ip="127.0.0.1"):
@@ -76,6 +76,23 @@ class HTTP(http.server.BaseHTTPRequestHandler):
 
 
 class SpecTests(unittest.TestCase):
+    def test_worker_exits_cleanly_while_parent_pipe_is_open(self):
+        with subprocess.Popen(python_command("portman.ssh_worker", "/usr/bin/true"),
+                              stdin=subprocess.PIPE, stderr=subprocess.PIPE) as worker:
+            self.assertEqual(worker.wait(timeout=5), 0, worker.stderr.read().decode())
+            self.assertNotIn(b"Fatal Python error", worker.stderr.read())
+
+    def test_worker_stops_child_when_parent_pipe_closes(self):
+        worker = subprocess.Popen(python_command("portman.ssh_worker", "/bin/sleep", "30"),
+                                  stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            _, error = worker.communicate(timeout=5)
+            self.assertEqual(worker.returncode, 1, error.decode())
+        finally:
+            if worker.poll() is None:
+                worker.terminate()
+                worker.wait(timeout=5)
+
     def test_control_server_starts_without_dns(self):
         from unittest.mock import patch
         from portman.service import Server, Handler

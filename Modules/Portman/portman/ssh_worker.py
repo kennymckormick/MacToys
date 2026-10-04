@@ -4,31 +4,32 @@ EOF also cleans up after an abrupt daemon crash, without trusting saved PIDs.
 """
 import os
 import signal
+import select
 import subprocess
 import sys
-import threading
 
 
 def main():
     child = subprocess.Popen(sys.argv[1:], stdin=subprocess.DEVNULL, start_new_session=True)
-    done = threading.Event()
+    stopping = False
 
     def stop(*_):
-        done.set()
+        nonlocal stopping
+        stopping = True
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
 
-    def parent_pipe():
+    # A daemon thread blocked in sys.stdin.buffer.read can abort Python during
+    # shutdown when SSH exits before its parent closes the pipe. Watch the raw
+    # descriptor in this loop instead; no buffered I/O lock survives shutdown.
+    while child.poll() is None and not stopping:
         try:
-            while sys.stdin.buffer.read(1):
-                pass
-        finally:
-            done.set()
-
-    threading.Thread(target=parent_pipe, daemon=True).start()
-    while child.poll() is None and not done.wait(0.2):
-        pass
+            readable, _, _ = select.select([sys.stdin.fileno()], [], [], 0.2)
+            if readable and not os.read(sys.stdin.fileno(), 4096):
+                stopping = True
+        except InterruptedError:
+            continue
     # The unreaped child still owns its PID/group; never look up a saved PID.
     if child.returncode is None:
         try:

@@ -1,0 +1,76 @@
+name: Release DMG
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    uses: ./.github/workflows/check.yml
+  package:
+    needs: checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+          - arch: x86_64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build self-contained app and disk image
+        run: python3 scripts/release.py --arch '${{ matrix.arch }}'
+      - name: Verify installed copy with isolated data and no external Python
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/check-release.py dist/*.dmg --arch '${{ matrix.arch }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MacToys-${{ matrix.arch }}
+          path: |
+            dist/*.dmg
+            dist/*.sha256
+            dist/*.json
+          if-no-files-found: error
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [checks, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: MacToys-*
+          path: dist
+          merge-multiple: true
+      - name: Validate tag and publish verified installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, plistlib
+          from pathlib import Path
+          version = plistlib.loads(Path('Resources/Info.plist').read_bytes())['CFBundleShortVersionString']
+          assert os.environ['RELEASE_TAG'] == 'v' + version, 'Tag/version mismatch'
+          manifests = list(Path('dist').glob('*.dmg.json'))
+          assert len(manifests) == 2, 'Both architectures must pass before publishing'
+          assert {json.loads(p.read_text())['architecture'] for p in manifests} == {'arm64', 'x86_64'}
+          for p in manifests:
+              info = json.loads(p.read_text())
+              assert info['version'] == version and not info['sourceModified']
+              assert info['commit'] == os.environ['GITHUB_SHA']
+              dmg = p.with_suffix('')
+              assert hashlib.sha256(dmg.read_bytes()).hexdigest() == info['dmgSHA256']
+          PY
+          gh release create "$RELEASE_TAG" dist/*.dmg dist/*.sha256 dist/*.json \
+            --verify-tag --title "MacToys ${RELEASE_TAG#v}" --notes-file "docs/releases/$RELEASE_TAG.md"

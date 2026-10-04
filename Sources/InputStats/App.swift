@@ -70,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
     private let isTest = ProcessInfo.processInfo.environment["INPUTSTATS_TEST_HOME"] != nil
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let needsSetup = FirstLaunch.needsSetup(directory: Database.directory, defaults: appDefaults)
         try? FileManager.default.createDirectory(at: Database.directory, withIntermediateDirectories: true)
         lockFD = Darwin.open(Database.directory.appendingPathComponent("app.lock").path, O_CREAT | O_RDWR, 0o600)
         guard lockFD >= 0, flock(lockFD, LOCK_EX | LOCK_NB) == 0 else {
@@ -77,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
             NSApp.terminate(nil); return
         }
         ownsLock = true
+        appDefaults.set(true, forKey: "setup.seen")
         do { try localBackup.recoverInterruptedRestore() }
         catch {
             haltForRecovery(); return
@@ -130,12 +132,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
                 "awakeError": awake.issue ?? "", "language": Localization.shared.code,
                 "quickTools": AppSettings.shared.quickPanel.configuration.tools.map(\.rawValue),
                 "quickDefault": AppSettings.shared.quickPanel.configuration.preferred.rawValue,
-                "todoStorageReady": todos.canEdit, "goalStorageReady": goals.canEdit, "notesStorageReady": notes.canEdit]
+                "todoStorageReady": todos.canEdit, "goalStorageReady": goals.canEdit, "notesStorageReady": notes.canEdit,
+                "firstLaunchSetup": needsSetup,
+                "bundledPortman": FileManager.default.isExecutableFile(atPath: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/portman").path)]
             if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
                 FileHandle.standardOutput.write(data); FileHandle.standardOutput.write(Data("\n".utf8))
             }
             NSApp.terminate(nil)
         } else if !args.contains("--background") {
+            if needsSetup { model.selection = .settings }
             showTools()
             if isTest && args.contains("--input-fixture") { openInputTest() }
         }

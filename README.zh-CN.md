@@ -4,6 +4,10 @@
 
 macOS 14+ 工具箱：待办清单、Markdown 笔记、长期目标、输入统计、端口转发、屏幕取色、鼠标滚轮反转、防止休眠，以及 GitHub 私有仓库备份。
 
+[下载 Apple Silicon 版](https://github.com/kennymckormick/MacToys/releases/download/v0.7.1/MacToys-0.7.1-arm64-unnotarized.dmg) · [下载 Intel 版](https://github.com/kennymckormick/MacToys/releases/download/v0.7.1/MacToys-0.7.1-x86_64-unnotarized.dmg)
+
+拖入「应用程序」即可安装，已内置 Python 和 Portman，无需开发工具。本版本**尚未公证**，首次打开可能需要在「系统设置 → 隐私与安全性 → 仍要打开」中放行。[安装与权限说明](docs/installing.zh-CN.md)
+
 ## 菜单栏
 
 - 笔记固定在小菜单中。在「设置 → 小菜单」中，可从待办、目标、统计、取色、滚轮和防休眠中再选择最多 3 个页签。

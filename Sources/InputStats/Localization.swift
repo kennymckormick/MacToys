@@ -53,6 +53,16 @@ final class Localization: ObservableObject {
     // Chinese keys keep the original interface wording and are the Chinese fallback.
     // English entries are checked for missing keys and matching format placeholders.
     static let english: [String: String] = [
+        "开始使用": "Getting started",
+        "先将 MacToys 拖入「应用程序」，从那里打开，再授予权限。": "Move MacToys to Applications and open it from there before granting permissions.",
+        "打开应用程序文件夹": "Open Applications",
+        "待办、笔记、长期目标、端口转发和防止休眠可直接使用。输入统计与滚轮反转需要以下系统权限。": "Todos, notes, goals, port forwarding, and Keep Awake work immediately. Input Stats and Scroll Reversal need the system permissions below.",
+        "辅助功能": "Accessibility",
+        "输入监控": "Input Monitoring",
+        "查看设置": "View settings",
+        "授予权限": "Grant access",
+        "在系统设置中启用 MacToys；如列表中没有它，点「+」添加应用。授权后退出并重新打开 MacToys。输入统计只保存计数，不保存输入原文。": "Enable MacToys in System Settings. If it is missing, click + to add it. Quit and reopen MacToys after granting access. Input Stats saves counts, never typed text.",
+        "内置 Portman 缺失，请重新下载并安装 MacToys。": "The bundled Portman is missing. Download and install MacToys again.",
         "笔记": "Notes",
         "选择笔记": "Select note",
         "未命名笔记": "Untitled note",

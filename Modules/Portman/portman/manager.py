@@ -9,13 +9,12 @@ import os
 import shlex
 import shutil
 import socket
-import sys
 import tempfile
 import time
 import uuid
 from pathlib import Path
 
-from .common import PortmanError, address, atomic_json, endpoint, private_dir, read_json, validate_spec
+from .common import PortmanError, address, atomic_json, endpoint, private_dir, read_json, validate_spec, python_command
 
 
 def now():
@@ -222,7 +221,7 @@ class Mapping:
             args += ["-p", str(s["ssh_port"])]
         args += ["--", s["via"]]
         self.proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "portman.ssh_worker", *args,
+            *python_command("portman.ssh_worker", *args),
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE, start_new_session=True)
         lines = []

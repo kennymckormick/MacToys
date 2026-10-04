@@ -3,11 +3,18 @@ import json
 import os
 import re
 import tempfile
+import sys
 from pathlib import Path
 
 
 class PortmanError(Exception):
     pass
+
+
+def python_command(module, *args):
+    # Every descendant uses the same relocatable runtime, including SSH workers.
+    # -I ignores user Python settings; -B keeps the signed app read-only.
+    return [sys.executable, "-I", "-B", str(Path(__file__).with_name("_entry.py")), module, *args]
 
 
 def state_dir():

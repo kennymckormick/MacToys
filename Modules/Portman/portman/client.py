@@ -1,13 +1,12 @@
 import json
 import os
 import subprocess
-import sys
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
-from .common import PortmanError, private_dir, read_json
+from .common import PortmanError, private_dir, read_json, python_command
 
 
 def request(runtime, path, data=None, timeout=35):
@@ -51,12 +50,11 @@ def ensure(home):
     path = home / "daemon.log"
     if path.exists() and path.stat().st_size > 1048576:
         path.replace(home / "daemon.log.1")
-    # The module path is explicit so installed launchers and source checkouts agree.
+    # Do not depend on a developer's Python installation or environment.
     env = dict(os.environ, PORTMAN_HOME=str(home))
     source = str(Path(__file__).resolve().parent.parent)
-    env["PYTHONPATH"] = source + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     with path.open("ab") as log:
-        proc = subprocess.Popen([sys.executable, "-m", "portman", "--home", str(home), "_serve"],
+        proc = subprocess.Popen(python_command("portman", "--home", str(home), "_serve"),
                                 stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                                 start_new_session=True, cwd=source, env=env)
     deadline = time.monotonic() + 8

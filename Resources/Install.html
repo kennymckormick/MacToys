@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Install MacToys · 安装 MacToys</title>
+<style>
+:root{color-scheme:light dark}body{font:16px/1.6 system-ui,sans-serif;max-width:680px;margin:48px auto;padding:0 24px}h1{letter-spacing:-.04em}h2{font-size:20px;margin-top:32px}li{margin:10px 0}a{color:#2680ed}code{font-size:13px;overflow-wrap:anywhere}.tag{font-size:13px;color:#777}hr{border:0;border-top:1px solid #8884;margin:36px 0}
+</style>
+<h1>MacToys</h1>
+<p class="tag">macOS 14+ · Self-contained · Not notarized</p>
+<h2>Install</h2>
+<ol><li>Drag <b>MacToys.app</b> to <b>Applications</b>. Eject this disk image and open MacToys from Applications.</li>
+<li>This release is ad-hoc signed, without Apple notarization. If macOS blocks it, after trying to open it, go to <b>System Settings → Privacy &amp; Security → Open Anyway</b>. Approve only if you trust the download. Managed Macs may not allow an exception.</li>
+<li>MacToys starts with its permission guide. Grant <b>Accessibility</b> and any requested <b>Input Monitoring</b> access for Input Stats and Scroll Reversal, then quit and reopen the app. Todos, Notes, Goals, Portman and Keep Awake do not require these permissions.</li></ol>
+<p>Python and Portman are included. No Xcode, Homebrew, pip or Node.js installation is needed. SSH tunnels still use your SSH hosts and credentials. Notes work offline.</p>
+<p><b>Updating:</b> Quit MacToys before replacing it. Your data stays in <code>~/Library/Application Support/InputStats</code>. If you previously installed a source build as <code>InputStats.app</code>, keep using the source installer with the same signing identity, or back up first and migrate deliberately; do not keep two copies. Moving from a self-signed build to this release can require granting permissions again.</p>
+<p>CLI: <code>/Applications/MacToys.app/Contents/MacOS/portman -h</code></p>
+<p><a href="https://github.com/kennymckormick/MacToys/releases">Official releases and checksums</a> · <a href="https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac">Apple’s first-open instructions</a></p>
+<hr><section lang="zh-Hans"><h2>安装</h2>
+<ol><li>将 <b>MacToys.app</b> 拖入 <b>Applications（应用程序）</b>，推出磁盘映像，再从应用程序文件夹打开。</li>
+<li>本版本尚未通过 Apple 公证。如果 macOS 阻止打开，在尝试打开后，前往<b>系统设置 → 隐私与安全性 → 仍要打开</b>，仅在信任下载来源时放行。受组织管理的 Mac 可能禁止此操作。</li>
+<li>首次启动会显示权限说明。输入统计和滚轮反转需要<b>辅助功能</b>及系统请求的<b>输入监控</b>权限；授权后退出并重新打开应用。待办、笔记、目标、端口转发和防止休眠不需要这些权限。</li></ol>
+<p>已包含 Python 和 Portman，无需安装 Xcode、Homebrew、pip 或 Node.js。SSH 隧道仍需你自己的主机配置和凭证。笔记编辑器可离线使用。</p>
+<p><b>升级：</b>先退出再替换应用。数据保留在 <code>~/Library/Application Support/InputStats</code>。如果以前通过源码安装为 <code>InputStats.app</code>，请继续使用原签名的源码安装器，或备份后再迁移，避免保留两份应用。切换签名可能需要重新授权。</p></section></html>

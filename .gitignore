@@ -14,6 +14,7 @@ dist/
 .env
 .env.*
 *.sqlite*
+!Resources/Python-Licenses/LICENSE.sqlite.txt
 *.db
 *.p12
 *.pfx

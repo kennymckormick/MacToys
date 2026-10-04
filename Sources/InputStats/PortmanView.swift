@@ -26,25 +26,12 @@ final class PortmanController: ObservableObject {
     }
     func disconnectView() { generation += 1; loading = false; webView?.stopLoading(); webView = nil; url = nil }
     private static func discover() throws -> URL {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let candidates = [home.appendingPathComponent(".local/bin/portman").path, "/opt/homebrew/bin/portman", "/usr/local/bin/portman"]
+        let launch = try PortmanLaunch.resolve(bundle: Bundle.main.bundleURL,
+            home: FileManager.default.homeDirectoryForCurrentUser, environment: ProcessInfo.processInfo.environment)
         let process = Process()
-        var environment = ProcessInfo.processInfo.environment
-        // Bundled Python must never write __pycache__ inside the signed app.
-        environment["PYTHONDONTWRITEBYTECODE"] = "1"
-        if let launcher = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
-            process.executableURL = URL(fileURLWithPath: launcher)
-            process.arguments = ["gui", "--no-open", "--json"]
-        } else if let resource = Bundle.main.resourceURL?.appendingPathComponent("Portman"), FileManager.default.fileExists(atPath: resource.path) {
-            let python = ["/Library/Developer/CommandLineTools/usr/bin/python3", "/opt/homebrew/bin/python3", "/usr/bin/python3"].first(where: { FileManager.default.isExecutableFile(atPath: $0) })
-            guard let python else { throw PortmanError.message(L("未找到 Python 3，请安装 Portman 的运行环境。")) }
-            process.executableURL = URL(fileURLWithPath: python)
-            process.arguments = ["-m", "portman", "gui", "--no-open", "--json"]
-            environment["PYTHONPATH"] = resource.path
-        } else { throw PortmanError.message(L("未找到 Portman，请先安装或检查 ~/.local/bin/portman。")) }
-        // Test instances explicitly use their own daemon, never live mappings.
-        if let test = environment["INPUTSTATS_TEST_HOME"] { environment["PORTMAN_HOME"] = URL(fileURLWithPath: test).appendingPathComponent("portman").path }
-        process.environment = environment
+        process.executableURL = launch.executable
+        process.arguments = launch.arguments
+        process.environment = launch.environment
         let pipe = Pipe()
         process.standardOutput = pipe; process.standardError = FileHandle.nullDevice; process.standardInput = FileHandle.nullDevice
         try process.run()

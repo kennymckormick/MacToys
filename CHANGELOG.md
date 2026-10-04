@@ -1,5 +1,13 @@
 # 版本记录
 
+## 0.7.1
+
+- 提供 Apple Silicon / Intel 独立 DMG，内置 Python 和 Portman，无需开发环境。
+- 增加首次权限引导、中英双语安装说明、下载校验和构建记录；当前版本明确标注未公证。
+- 发布版优先使用内置运行环境，后台和 SSH 子进程忽略用户 Python 配置，不向已签名应用写入缓存。
+- 修复 SSH 子进程提前退出时，后台读取线程导致 Python 退出崩溃的问题。
+- 发布流程在两种架构上验证后上传 GitHub Releases，本地构建不影响正在使用的应用。
+
 ## 0.7.0
 
 - Add offline WYSIWYG Markdown notes, local autosave, source editing, and Markdown export. Notes is pinned in the Quick Panel, preserving the previous preferred tab.

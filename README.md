@@ -4,6 +4,10 @@
 
 Todo lists, Markdown notes, long-term goals, input statistics, port forwarding, color picking, mouse wheel reversal, sleep prevention, and private GitHub backups for macOS 14+.
 
+[Download for Apple Silicon](https://github.com/kennymckormick/MacToys/releases/download/v0.7.1/MacToys-0.7.1-arm64-unnotarized.dmg) · [Download for Intel](https://github.com/kennymckormick/MacToys/releases/download/v0.7.1/MacToys-0.7.1-x86_64-unnotarized.dmg)
+
+Drag MacToys to Applications. Python and Portman are included; no development tools are needed. This release is **not notarized**: macOS may require **System Settings → Privacy & Security → Open Anyway** on first launch. [Installation and permissions](docs/installing.md)
+
 ## Menu bar
 
 - Notes is pinned in the menu bar. Choose up to three more tabs from Todo, Goals, Stats, Colors, Scroll, and Awake in Settings → Quick Panel.

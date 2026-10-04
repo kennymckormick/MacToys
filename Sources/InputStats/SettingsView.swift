@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var errorMessage: String?
     var body: some View {
         Form {
+            SetupChecklist()
             Section(L("小菜单")) {
                 HStack {
                     Text(L("选择常用功能"))
