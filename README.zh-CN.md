@@ -77,6 +77,14 @@ macOS 14+ 工具箱：待办清单、Markdown 笔记、长期目标、输入统�
 
 [从源码构建](docs/building.md) · [使用说明](docs/usage.zh-CN.md)
 
+## 许可证
+
+Copyright (C) 2026 MacToys contributors.
+
+MacToys 采用 [GNU 通用公共许可证第 3 版](LICENSE)，或由你选择的任何后续版本（`GPL-3.0-or-later`）。
+
+第三方组件保留各自的许可证，详见[笔记编辑器声明](Resources/NotesEditor/THIRD-PARTY-NOTICES.txt)与 [Python 依赖许可证](Resources/Python-Licenses/)。
+
 ## 赞助
 
 [在 Ko-fi 请我喝杯咖啡](https://ko-fi.com/kennyutc)

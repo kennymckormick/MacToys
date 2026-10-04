@@ -77,6 +77,14 @@ Drag MacToys to Applications. Python and Portman are included; no development to
 
 [Build from source](docs/building.md) · [Usage notes (中文)](docs/usage.zh-CN.md)
 
+## License
+
+Copyright (C) 2026 MacToys contributors.
+
+MacToys is licensed under the [GNU General Public License, version 3](LICENSE), or (at your option) any later version (`GPL-3.0-or-later`).
+
+Third-party components retain their own licenses. See the [Notes editor notices](Resources/NotesEditor/THIRD-PARTY-NOTICES.txt) and [Python dependency licenses](Resources/Python-Licenses/).
+
 ## Support
 
 [Buy me a coffee on Ko-fi](https://ko-fi.com/kennyutc)
