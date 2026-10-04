@@ -9,7 +9,7 @@ struct CloudSyncView: View {
         Form {
             Section {
                 Text(L("云端同步")).font(.title2.bold())
-                Text(L("把配置和数据备份到自己的 GitHub 私有仓库，在另一台 Mac 上恢复。仅手动同步，不在后台轮询。"))
+                Text(L("把配置和数据备份到自己的 GitHub 私有仓库，在另一台 Mac 上恢复。可每天自动备份，也可随时手动操作。"))
                     .foregroundStyle(.secondary)
             }
             if let repository = store.repository {
@@ -29,6 +29,24 @@ struct CloudSyncView: View {
                         LabeledContent(L("上次操作")) { Text(last, format: .dateTime.year().month().day().hour().minute()) }
                     }
                     Text(L("上传会更新云端快照；恢复会替换本机数据，不自动合并。GitHub 会保留以前的提交版本。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section(L("每日自动备份")) {
+                    Toggle(L("每天备份到此仓库"), isOn: Binding(get: { store.automaticSyncEnabled }, set: store.setAutomaticSyncEnabled))
+                    Text(L("每天本地时间 9:00 备份；休眠或退出时错过，会在唤醒或下次启动后补传。数据未变更时不重复上传。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let last = store.lastAutomaticCheck {
+                        LabeledContent(L("上次备份检查")) { Text(last, format: .dateTime.year().month().day().hour().minute()) }
+                    }
+                    if store.automaticSyncEnabled, let pause = store.automaticPause {
+                        Text(pause.message).foregroundStyle(.orange)
+                        if pause != .remoteChanged {
+                            Button(L("重试自动备份")) { store.retryAutomaticSync() }
+                        }
+                    } else if let next = store.nextAutomaticSync {
+                        LabeledContent(L("下次自动备份")) { Text(next, format: .dateTime.month().day().hour().minute()) }
+                    }
+                    Text(L("云端被另一台机器修改时会暂停上传，等待你确认；不会自动替换本机数据。"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             } else {

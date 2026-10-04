@@ -99,6 +99,11 @@ struct BackupSnapshot: Codable, Equatable {
     var notes: [NoteItem] = []
     var statistics: [MinuteBucket]
 
+    func hasSameContents(as other: BackupSnapshot) -> Bool {
+        format == other.format && version == other.version && preferences == other.preferences &&
+            todos == other.todos && goals == other.goals && notes == other.notes && statistics == other.statistics
+    }
+
     func validate() throws {
         guard format == "MacToys Backup" else { throw BackupError.invalid }
         if version > 1 { throw BackupError.newerVersion }

@@ -92,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         InputMonitor.shared.start()
         scroll.start()
         awake.start()
+        if !isTest { cloud.startAutomaticSync() }
         for number in [SIGTERM, SIGINT] {
             signal(number, SIG_IGN)
             let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
@@ -341,6 +342,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
     func windowWillClose(_ notification: Notification) { model.visible = false; NSApp.setActivationPolicy(.accessory) }
     private func haltForRecovery() {
         recoveryBlocked = true
+        cloud.stopAutomaticSync()
         InputMonitor.shared.stop(savePending: false)
         popover.performClose(nil); window?.close()
         let alert = NSAlert(); alert.messageText = L("本地数据恢复未完成")
@@ -371,12 +373,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard ownsLock, !recoveryBlocked else { return .terminateNow }
+        cloud.stopAutomaticSync()
         Task {
             do { try await NotesEditorRegistry.shared.flushAll(); try notes.flush() }
             catch {
                 sender.reply(toApplicationShouldTerminate: false)
                 let alert = NSAlert(); alert.messageText = L("笔记尚未保存，已取消退出")
                 alert.informativeText = notes.errorMessage ?? error.localizedDescription; alert.runModal()
+                if !isTest { cloud.startAutomaticSync() }
                 return
             }
             InputMonitor.shared.prepareForTermination { error in
@@ -384,6 +388,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
                     sender.reply(toApplicationShouldTerminate: false)
                     let alert = NSAlert(); alert.messageText = L("统计尚未保存，已取消退出")
                     alert.informativeText = Database.errorDescription(error); alert.runModal()
+                    if !self.isTest { self.cloud.startAutomaticSync() }
                 } else { sender.reply(toApplicationShouldTerminate: true) }
             }
         }
@@ -391,6 +396,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
     }
     func applicationWillTerminate(_ notification: Notification) {
         if ownsLock {
+            cloud.stopAutomaticSync()
             scroll.stop()
             awake.stop()
             if !recoveryBlocked && (!isTest || ProcessInfo.processInfo.environment["INPUTSTATS_ENABLE_TEST_MONITOR"] == "1") { InputMonitor.shared.stop() }

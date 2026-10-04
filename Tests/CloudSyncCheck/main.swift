@@ -40,7 +40,13 @@ private final class MockGitHub: URLProtocol {
 }
 private final class MemoryCredentials: SyncCredentialStore {
     var tokens: [String: String] = [:]
-    func read(account: String) throws -> String? { tokens[account] }
+    var allowsInteraction: [Bool] = []
+    var readError: Error?
+    func read(account: String, allowInteraction: Bool) throws -> String? {
+        allowsInteraction.append(allowInteraction)
+        if let readError { throw readError }
+        return tokens[account]
+    }
     func save(_ token: String, account: String) throws { tokens[account] = token }
     func remove(account: String) throws { tokens.removeValue(forKey: account) }
 }
@@ -229,6 +235,7 @@ struct CloudSyncChecks {
         MockGitHub.handler = { _ in throw URLError(.notConnectedToInternet) }
         do { try await client.verify(repository, token: "test-fixture-token"); check(false, "Offline error") }
         catch GitHubSyncError.network { check(true, "Offline error is actionable") }
+        try await automaticBackups(snapshot: original)
         print("Cloud Sync checks: \(checks - failures)/\(checks) passed")
         exit(failures == 0 ? 0 : 1)
     }
@@ -239,5 +246,197 @@ struct CloudSyncChecks {
             try? await Task.sleep(nanoseconds: 5_000_000)
         }
         check(false, "Sync operation completed before test timeout")
+    }
+
+    @MainActor private static func automaticBackups(snapshot: BackupSnapshot) async throws {
+        let suite = "com.local.mactoys.daily-tests.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let iso = ISO8601DateFormatter()
+        func date(_ value: String) -> Date { iso.date(from: value)! }
+        var clock = date("2026-10-04T10:00:00Z")
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let credentials = MemoryCredentials()
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [MockGitHub.self]
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        let client = GitHubBackupClient(session: session)
+        var local = snapshot, remote: BackupSnapshot?
+        var sha = String(repeating: "a", count: 40)
+        var requests = 0, writes = 0, restores = 0, captures = 0
+        var offline = false, isPrivate = true, rejectWrite = false, unauthorized = false
+        var suspendCapture = false
+        var pendingCapture: CheckedContinuation<Void, Never>?
+        MockGitHub.handler = { request in
+            requests += 1
+            if offline { throw URLError(.notConnectedToInternet) }
+            if unauthorized { return (401, Data()) }
+            let path = request.url!.path
+            if path == "/repos/test-owner/daily" {
+                return (200, try JSONSerialization.data(withJSONObject: ["full_name": "test-owner/daily", "private": isPrivate]))
+            }
+            if request.httpMethod == "PUT" {
+                writes += 1
+                let body = try JSONSerialization.jsonObject(with: MockGitHub.body(of: request)) as! [String: Any]
+                if rejectWrite || (body["sha"] as? String) != (remote == nil ? nil : sha) { return (409, Data()) }
+                remote = try BackupSnapshot.decode(Data(base64Encoded: body["content"] as! String)!)
+                sha = String(format: "%040x", writes)
+                return (200, try JSONSerialization.data(withJSONObject: ["content": ["sha": sha]]))
+            }
+            guard let remote else { return (404, Data()) }
+            let data = try remote.encoded()
+            if path.hasSuffix("/contents/mactoys-backup.json") {
+                return (200, try JSONSerialization.data(withJSONObject: ["sha": sha, "size": data.count, "type": "file", "path": "mactoys-backup.json"]))
+            }
+            return (200, try JSONSerialization.data(withJSONObject: ["sha": sha, "size": data.count, "encoding": "base64", "content": data.base64EncodedString()]))
+        }
+        func makeStore() -> CloudSyncStore {
+            CloudSyncStore(defaults: defaults, backupsDirectory: folder, credentials: credentials, client: client,
+                capture: {
+                    captures += 1
+                    if suspendCapture { await withCheckedContinuation { pendingCapture = $0 } }
+                    var result = local; result.createdAt = clock; return result
+                }, restore: { local = $0; restores += 1; return folder }, now: { clock }, calendar: { calendar })
+        }
+        let store = makeStore()
+        await store.synchronizeAutomaticallyIfDue()
+        check(requests == 0 && credentials.allowsInteraction.isEmpty, "Unconnected automatic backup never accesses network or credentials")
+        store.repositoryDraft = "test-owner/daily"; store.tokenDraft = "test-fixture-token"
+        store.connect(); await finish(store)
+        check(store.automaticSyncEnabled, "Connected private repositories default to daily backups")
+        store.setAutomaticSyncEnabled(false)
+        let beforeDisabled = requests
+        await store.synchronizeAutomaticallyIfDue()
+        check(requests == beforeDisabled && !makeStore().automaticSyncEnabled, "Disabling automatic backup persists and prevents all requests")
+        store.setAutomaticSyncEnabled(true)
+        await store.synchronizeAutomaticallyIfDue()
+        check(writes == 1 && remote?.hasSameContents(as: local) == true && store.lastAutomaticCheck == clock, "First automatic backup creates the snapshot in an empty private repository")
+        check(credentials.allowsInteraction.last == false && restores == 0, "Background backups prohibit Keychain prompts and never restore data")
+        let firstRequests = requests
+        await store.synchronizeAutomaticallyIfDue()
+        await makeStore().synchronizeAutomaticallyIfDue()
+        check(requests == firstRequests, "Completed daily backup survives relaunch without duplicate requests")
+        let relaunched = makeStore()
+        relaunched.startAutomaticSync()
+        check(relaunched.nextAutomaticSync == date("2026-10-05T09:00:00Z"), "A single timer schedules the next local morning")
+        relaunched.stopAutomaticSync()
+        check(relaunched.nextAutomaticSync == nil, "Stopping automatic sync clears the scheduled timer")
+        clock = date("2026-10-05T08:59:00Z")
+        await store.synchronizeAutomaticallyIfDue()
+        check(requests == firstRequests, "Daily backup does not run before its deadline")
+        clock = date("2026-10-05T09:00:00Z")
+        await store.synchronizeAutomaticallyIfDue()
+        check(writes == 1 && store.lastAutomaticCheck == clock, "Unchanged data is checked without a new commit or timestamp-only upload")
+        clock = date("2026-10-06T15:00:00Z"); local.todos[0].title = "Changed after wake"
+        await store.synchronizeAutomaticallyIfDue()
+        check(writes == 2 && remote?.todos == local.todos, "A missed daily deadline catches up after wake with current data")
+
+        clock = date("2026-10-07T09:00:00Z"); local.notes[0].markdown = "Pending offline edit"; offline = true
+        await store.synchronizeAutomaticallyIfDue()
+        let failedRequests = requests
+        check(store.automaticPause == nil && store.errorMessage != nil && writes == 2, "Network failure preserves data and remains retryable")
+        clock = date("2026-10-07T09:29:59Z")
+        await makeStore().synchronizeAutomaticallyIfDue()
+        check(requests == failedRequests, "Retry cooldown persists across relaunch")
+        offline = false; clock = date("2026-10-07T09:30:00Z")
+        await store.synchronizeAutomaticallyIfDue()
+        check(writes == 3 && store.errorMessage == nil && remote?.notes == local.notes, "Delayed retry uploads successfully and clears the error")
+        check(DailyBackupSchedule.retryDelay(failures: 1) == 1800 && DailyBackupSchedule.retryDelay(failures: 2) == 3600 && DailyBackupSchedule.retryDelay(failures: 100) == 21600, "Repeated failures back off from 30 minutes to a six-hour ceiling")
+
+        clock = date("2026-10-08T09:00:00Z"); credentials.readError = GitHubSyncError.keychain(-25308)
+        let beforeLocked = requests
+        await store.synchronizeAutomaticallyIfDue()
+        check(requests == beforeLocked && store.automaticPause == nil && credentials.allowsInteraction.last == false, "Locked Keychain defers backup without prompting or contacting GitHub")
+        credentials.readError = nil; clock = date("2026-10-08T09:30:00Z")
+        await store.synchronizeAutomaticallyIfDue()
+        check(store.lastAutomaticCheck == clock && store.errorMessage == nil, "Unlocked Keychain recovers on the next retry")
+
+        clock = date("2026-10-09T09:00:00Z")
+        remote!.todos[0].title = "Edit from another Mac"; sha = String(repeating: "c", count: 40)
+        await store.synchronizeAutomaticallyIfDue()
+        check(store.automaticPause == .remoteChanged && writes == 3 && restores == 0 && local.todos[0].title == "Changed after wake", "Another Mac's changes pause automatic uploads without overwriting either side")
+        let beforeReview = requests
+        await makeStore().synchronizeAutomaticallyIfDue()
+        check(requests == beforeReview, "Conflict pause survives restart without background polling")
+        store.prepareDownload(); await finish(store)
+        if let action = store.confirmation { store.confirm(action); await finish(store) }
+        check(store.automaticPause == nil && restores == 1 && local.todos == remote?.todos, "Explicit cloud restore establishes a reviewed revision and resumes daily backups")
+        clock = date("2026-10-10T09:00:00Z"); local.todos[0].title = "Edit after reviewed restore"
+        await store.synchronizeAutomaticallyIfDue()
+        check(writes == 4 && store.automaticPause == nil && remote?.todos == local.todos, "Daily backups continue from the explicitly restored cloud revision")
+
+        clock = date("2026-10-11T09:00:00Z"); local.todos[0].title = "Concurrent edit"; rejectWrite = true
+        await store.synchronizeAutomaticallyIfDue()
+        check(writes == 5 && store.automaticPause == .remoteChanged, "A GitHub write conflict is never force-retried")
+        rejectWrite = false
+        store.prepareUpload(); await finish(store)
+        if let action = store.confirmation { store.confirm(action); await finish(store) }
+        check(writes == 6 && store.automaticPause == nil && remote?.todos == local.todos, "An explicitly reviewed upload clears the conflict pause")
+        clock = date("2026-10-12T09:00:00Z"); isPrivate = false
+        let beforePublic = captures
+        await store.synchronizeAutomaticallyIfDue()
+        check(store.automaticPause == .repository && writes == 6 && captures == beforePublic, "A repository changed to public is rejected before reading local data or uploading")
+        isPrivate = true; store.retryAutomaticSync()
+        await store.synchronizeAutomaticallyIfDue()
+        check(store.automaticPause == nil && store.lastAutomaticCheck == clock, "Retry works after private repository access is restored")
+        clock = date("2026-10-13T09:00:00Z"); unauthorized = true
+        await store.synchronizeAutomaticallyIfDue()
+        check(store.automaticPause == .authorization, "Expired authorization stops automatic requests until user action")
+        unauthorized = false; store.tokenDraft = "test-fixture-token"
+        store.connect(); await finish(store)
+        await store.synchronizeAutomaticallyIfDue()
+        check(store.automaticPause == nil && store.lastAutomaticCheck == clock, "Reconnecting renews authorization without losing the reviewed revision")
+
+        clock = date("2026-10-14T09:00:00Z"); local.todos[0].title = "Local edit awaiting confirmation"
+        store.startAutomaticSync()
+        store.prepareUpload(); await finish(store)
+        let beforeSheet = requests
+        await store.synchronizeAutomaticallyIfDue()
+        check(requests == beforeSheet && store.confirmation != nil, "A pending manual confirmation prevents automatic work")
+        check(store.nextAutomaticSync == nil, "A sheet awaiting user input does not poll on a short timer")
+        store.confirmation = nil
+        check(store.nextAutomaticSync == clock.addingTimeInterval(15), "Dismissing the confirmation reschedules an overdue backup")
+        store.stopAutomaticSync()
+        suspendCapture = true
+        let pending = Task { await store.synchronizeAutomaticallyIfDue() }
+        for _ in 0..<1000 {
+            if pendingCapture != nil { break }
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+        check(pendingCapture != nil, "Automatic capture can yield without holding up the app")
+        let duringCapture = requests
+        await store.synchronizeAutomaticallyIfDue()
+        check(requests == duringCapture, "Concurrent triggers do not start duplicate uploads")
+        pending.cancel(); pendingCapture?.resume(); pendingCapture = nil
+        await pending.value
+        check(writes == 6 && !store.busy && store.automaticPause == nil, "Cancellation before upload sends no data and releases the busy state")
+        suspendCapture = false
+
+        let deletedBackup = remote; remote = nil
+        await store.synchronizeAutomaticallyIfDue()
+        check(store.automaticPause == .remoteChanged && writes == 6, "Deleting the reviewed remote backup is a conflict, not permission to recreate it silently")
+        remote = deletedBackup; store.retryAutomaticSync()
+
+        defaults.removeObject(forKey: "cloud.remoteSHA"); defaults.removeObject(forKey: "cloud.auto.lastSuccess")
+        let legacy = makeStore()
+        await legacy.synchronizeAutomaticallyIfDue()
+        check(legacy.automaticPause == .remoteChanged && writes == 6, "An existing cloud backup without a reviewed baseline is never overwritten on upgrade or a new Mac")
+        local = remote!; legacy.retryAutomaticSync()
+        await legacy.synchronizeAutomaticallyIfDue()
+        check(legacy.automaticPause == nil && writes == 6 && defaults.string(forKey: "cloud.remoteSHA") == sha, "Identical local and remote data safely establish a baseline without a commit")
+        legacy.startAutomaticSync(); legacy.disconnect()
+        check(legacy.repository == nil && legacy.nextAutomaticSync == nil && defaults.string(forKey: "cloud.remoteSHA") == nil, "Disconnect cancels scheduling and removes revision history")
+        let afterDisconnect = requests
+        await legacy.synchronizeAutomaticallyIfDue()
+        check(requests == afterDisconnect && credentials.tokens.isEmpty, "Disconnected backup cannot use stale credentials")
+        legacy.stopAutomaticSync()
+
+        var newYork = Calendar(identifier: .gregorian); newYork.timeZone = TimeZone(identifier: "America/New_York")!
+        let spring = date("2026-03-07T14:00:00Z")
+        let fall = date("2026-10-31T13:00:00Z")
+        check(DailyBackupSchedule.nextAttempt(now: spring, lastSuccess: spring, retryAfter: nil, calendar: newYork) == date("2026-03-08T13:00:00Z"), "Spring daylight saving keeps the backup at 09:00 local time")
+        check(DailyBackupSchedule.nextAttempt(now: fall, lastSuccess: fall, retryAfter: nil, calendar: newYork) == date("2026-11-01T14:00:00Z"), "Fall daylight saving keeps the backup at 09:00 local time")
+        check(DailyBackupSchedule.nextAttempt(now: spring, lastSuccess: fall, retryAfter: nil, calendar: newYork) == spring, "Moving the clock backward does not suspend backups for months")
     }
 }

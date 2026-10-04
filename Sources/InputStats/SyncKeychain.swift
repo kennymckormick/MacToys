@@ -1,8 +1,9 @@
 import Foundation
 import Security
+import LocalAuthentication
 
 protocol SyncCredentialStore {
-    func read(account: String) throws -> String?
+    func read(account: String, allowInteraction: Bool) throws -> String?
     func save(_ token: String, account: String) throws
     func remove(account: String) throws
 }
@@ -13,9 +14,13 @@ struct SyncKeychain: SyncCredentialStore {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
          kSecAttrAccount as String: account, kSecAttrSynchronizable as String: false]
     }
-    func read(account: String) throws -> String? {
+    func read(account: String, allowInteraction: Bool = true) throws -> String? {
         var query = query(account)
         query[kSecReturnData as String] = true; query[kSecMatchLimit as String] = kSecMatchLimitOne
+        if !allowInteraction {
+            let context = LAContext(); context.interactionNotAllowed = true
+            query[kSecUseAuthenticationContext as String] = context
+        }
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }

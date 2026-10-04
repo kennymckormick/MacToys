@@ -2,7 +2,7 @@
 
 [English README](../README.md) · [简体中文](#简体中文)
 
-MacToys can store a snapshot in your own **private GitHub repository**. Sync is manual: uploading replaces the cloud snapshot, and restoring replaces local data. It does not merge edits from multiple Macs.
+MacToys backs up snapshots to your own **private GitHub repository**, daily or on demand. Uploading updates the cloud snapshot. Restoring is always manual and replaces local data; edits from multiple Macs are not merged.
 
 ## Connect
 
@@ -12,6 +12,17 @@ MacToys can store a snapshot in your own **private GitHub repository**. Sync is 
 4. Generate the token, paste it into MacToys, and click **Connect repository**. The token is saved in this Mac's Keychain. It is not included in preferences or backups. This is token authorization, not an OAuth login.
 
 The app checks that the repository is private when connecting, downloading, and uploading. Public and archived repositories are rejected. If the token expires or is revoked, disconnect and connect using a new token. Disconnecting removes the local credential; it does not delete the repository or revoke the token on GitHub.
+
+## Daily backups
+
+Daily automatic backup is enabled by default for a connected private repository. Turn it off in **Cloud Sync → Daily automatic backup** if you prefer manual backups. This choice and the schedule stay on each Mac and are not restored from a backup.
+
+- An empty repository gets its first backup shortly after connecting. Subsequent backups run at **9:00 AM local time** while MacToys is running, including with its windows closed. If the Mac is asleep or MacToys is closed, a missed backup runs shortly after waking or reopening. The app does not wake the computer or install a separate background service.
+- Unchanged data is checked without creating a new GitHub commit. Network failures and a locked Keychain retry after 30 minutes, then one, two, four, and at most six hours. Background reads never display a Keychain authorization prompt.
+- Automatic uploads only update the cloud revision this Mac last uploaded or explicitly restored. An unfamiliar cloud snapshot pauses automatic uploads unless its contents already match this Mac. This also protects existing backups when upgrading from a version that did not track the cloud revision.
+- To resolve that pause, review the backup and choose **Upload backup** to keep this Mac's data in the cloud, or **Restore from cloud** to use the cloud data on this Mac. Daily backups resume after the confirmed operation. There is no automatic download, merge, or forced overwrite.
+
+The settings show the last successful backup check, the next scheduled attempt, and any error requiring attention. Scheduling uses one non-repeating timer and reschedules after waking or changing the clock or time zone.
 
 ## Move to another Mac
 
@@ -31,7 +42,7 @@ Portman rules, SSH keys/config, GitHub credentials, system permission grants, la
 
 Backups use a versioned JSON file, `mactoys-backup.json`, with a 25 MB limit and up to 250,000 minute records. Future schema versions, malformed records, duplicate identifiers and invalid preferences are rejected before restore. The repository is private, but this is not end-to-end encryption: GitHub and any collaborators you grant repository access can read it. Use a dedicated repository and keep it private.
 
-No service account, MacToys server, timer, or background polling is involved. Tokens are sent only to `https://api.github.com`; redirects are rejected and the HTTP session does not persist cookies or cache responses.
+No service account or MacToys server is involved. Tokens are sent only to `https://api.github.com`; redirects are rejected and the HTTP session does not persist cookies or cache responses.
 
 GitHub documentation: [fine-grained token setup](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens), [repository contents API](https://docs.github.com/en/rest/repos/contents).
 
@@ -45,7 +56,11 @@ GitHub documentation: [fine-grained token setup](https://docs.github.com/en/auth
 
 同步包括：待办与完成记录、长期目标与当前状态、Markdown 笔记与标题、输入统计计数、语言、小菜单、颜色收藏/历史、快捷键和工具偏好。Portman 规则、SSH 密钥、系统授权和登录启动仍由每台机器单独配置。未提交的待办或目标草稿不属于备份；笔记编辑器会在备份或恢复前保存当前内容。
 
-这是手动快照同步，不自动合并多台机器的编辑。恢复会替换本机数据，并结束正在运行的防休眠会话。操作前会自动保存一份本地备份，之后可用「恢复本地备份」撤回。关闭窗口后不进行同步，也没有后台轮询。
+连接私有仓库后，默认开启「每日自动备份」，可在云端同步页面关闭。空仓库会在连接后首次备份，之后在应用运行期间每天本地时间 **9:00** 执行，关闭窗口仍会备份。休眠或退出时错过，会在唤醒或下次启动后补传，不会唤醒电脑，也不会安装独立后台服务。数据未变更时不会重复提交。网络失败或钥匙串锁定后，重试间隔从 30 分钟递增到最多 6 小时；后台不会弹出钥匙串授权框。开关和调度记录只保存在当前 Mac，不参与备份。
+
+自动上传只会更新本机上次上传或确认恢复的云端版本。另一台 Mac 修改了云端，或旧版本升级后尚未记录云端版本时，会暂停上传；本机与云端内容完全一致时可直接确认，无需重复提交。请先检查要保留的数据，再手动「上传备份」或「从云端恢复」，之后自动备份会继续。页面会显示上次检查、下次尝试时间和需要处理的错误。
+
+这是快照备份，不自动下载或合并多台机器的编辑。恢复始终需要确认，会替换本机数据，并结束正在运行的防休眠会话。恢复前会自动保存一份本地备份，之后可用「恢复本地备份」撤回。
 
 本地备份在 `~/Library/Application Support/InputStats/SyncBackups/`。如果恢复中断，下次启动会用 `sync-rollback.json` 回滚到恢复前的状态，不要提前删除它。云端旧版本保留在 GitHub 提交历史中。
 

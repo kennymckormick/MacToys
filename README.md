@@ -35,9 +35,11 @@ Drag MacToys to Applications. Python and Portman are included; no development to
 
 ## Cloud Sync
 
-- Manually back up tasks, notes, goals, input counts, saved colors, and preferences to a private GitHub repository.
+- Back up tasks, notes, goals, input counts, saved colors, and preferences to a private GitHub repository, daily or on demand.
+- Daily backups run at 9:00 AM local time while MacToys is running, with catch-up after sleep or reopening. Unchanged data is not uploaded again.
+- If another Mac changes the cloud backup, automatic uploads pause until you review it.
 - Restore the snapshot on another Mac. A local backup is saved before every restore; data is replaced, not merged.
-- Authorize with a fine-grained access token stored in the macOS Keychain. No background polling.
+- Authorize with a fine-grained access token stored in the macOS Keychain. Automatic backups can be turned off in Cloud Sync.
 - Portman rules, SSH keys, system permissions, login items, and active Keep Awake sessions stay local.
 
 [Set up Cloud Sync](docs/cloud-sync.md)
