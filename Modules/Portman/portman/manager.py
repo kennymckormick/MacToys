@@ -14,7 +14,7 @@ import time
 import uuid
 from pathlib import Path
 
-from .common import PortmanError, address, atomic_json, endpoint, private_dir, read_json, validate_spec, python_command
+from .common import PortmanError, address, atomic_json, endpoint, private_dir, read_json, validate_spec, python_command, session_recovery_needed
 
 
 def now():
@@ -99,7 +99,7 @@ class Mapping:
 
     async def run(self):
         delay = 1
-        while True:
+        while not self.manager.stopping:
             self.state, self.next_retry_at = "starting", None
             active_time = None
             try:
@@ -249,6 +249,7 @@ class Manager:
         self.home = private_dir(home)
         private_dir(home / "logs")
         self.lock = asyncio.Lock()
+        self.stopping = False
         self.ssh = shutil.which("ssh")
         # Short Unix socket paths work even with a long PORTMAN_HOME on macOS.
         self.sockets = Path(tempfile.mkdtemp(prefix="portman-", dir="/tmp"))
@@ -296,6 +297,7 @@ class Manager:
                 m.task = asyncio.create_task(m.run())
 
     async def close(self):
+        self.stopping = True
         await asyncio.gather(*(m.stop() for m in self.items.values()))
         for m in self.items.values():
             m.handler.close()
@@ -310,7 +312,19 @@ class Manager:
             return {"name": m.spec["name"], "lines": lines}
         if action == "check":
             return await self.check(self.get(data.get("name")), data.get("http_path"))
+        if action == "recover-session" and self.lock.locked():
+            # Do not queue an automatic restart behind an in-flight mutation.
+            return {"stopping": False}
         async with self.lock:
+            if self.stopping:
+                raise PortmanError("Portman is stopping; reconnect to the background service")
+            if action == "recover-session":
+                if not session_recovery_needed([m.snapshot() for m in self.items.values()]):
+                    return {"stopping": False}
+                # No await between the final check and closing admission. Retry
+                # tasks also check this flag before launching another SSH child.
+                self.stopping = True
+                return {"stopping": True}
             if action == "add":
                 spec = validate_spec(data.get("spec"))
                 for m in self.items.values():

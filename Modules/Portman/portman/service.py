@@ -124,6 +124,11 @@ class Handler(BaseHTTPRequestHandler):
             if action == "shutdown":
                 self.reply(200, {"stopping": True})
                 self.server.loop.call_soon_threadsafe(self.server.stop_event.set)
+            elif action == "recover-session":
+                result = self.call(action, data)
+                if result["stopping"]:
+                    self.server.loop.call_soon_threadsafe(self.server.stop_event.set)
+                self.reply(200, result)
             elif action in ("add", "edit", "start", "stop", "restart", "remove", "check"):
                 self.reply(200, self.call(action, data))
             else:

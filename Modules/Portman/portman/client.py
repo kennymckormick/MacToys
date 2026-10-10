@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
-from .common import PortmanError, atomic_json, private_dir, read_json, python_command, user_context_command
+from .common import PortmanError, atomic_json, private_dir, read_json, python_command, user_context_command, session_recovery_needed
 
 
 def request(runtime, path, data=None, timeout=35):
@@ -48,13 +48,23 @@ def needs_session_recovery(runtime):
     if sys.platform != "darwin":
         return False
     mappings = request(runtime, "/api/mappings", timeout=2).get("mappings", [])
-    # Never interrupt an established forward or one that is still starting.
-    if any(m.get("status") not in ("stopped", "retrying") for m in mappings):
+    return session_recovery_needed(mappings)
+
+
+def recovery_on_cooldown(marker):
+    # This is disposable coordination state, not user configuration. A damaged
+    # marker or a clock moving backwards must not disable recovery permanently.
+    try:
+        previous = read_json(marker, {})
+    except PortmanError:
         return False
-    error = "No user exists for uid {}".format(os.getuid())
-    return any(m.get("enabled") and m.get("mode") in ("ssh-local", "ssh-remote")
-               and m.get("status") == "retrying" and m.get("error", "").strip() == error
-               for m in mappings)
+    attempted = previous.get("attempted_at") if isinstance(previous, dict) else None
+    if type(attempted) not in (int, float):
+        return False
+    try:
+        return 0 <= time.time() - attempted < 300
+    except OverflowError:
+        return False
 
 
 def recover_session(home, runtime):
@@ -67,13 +77,21 @@ def recover_session(home, runtime):
     # separately prevents duplicate replacements from starting.
     with (home / "recovery.lock").open("a+") as lock:
         os.fchmod(lock.fileno(), 0o600)
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            # Another client owns recovery; keep the GUI responsive.
+            return runtime
         current = running(home)
-        if current != runtime or not needs_session_recovery(current):
+        if current != runtime:
+            return current
+        try:
+            if not needs_session_recovery(current):
+                return current
+        except PortmanError:
             return current
         marker = home / "recovery.json"
-        previous = read_json(marker, {})
-        if time.time() - previous.get("attempted_at", 0) < 300:
+        if recovery_on_cooldown(marker):
             return current
         # -G with an empty config resolves the local account without making a
         # connection or invoking user SSH config. Only a healthy client repairs.
@@ -81,14 +99,23 @@ def recover_session(home, runtime):
             probe = subprocess.run(user_context_command([
                 "/usr/bin/ssh", "-G", "-F", os.devnull, "localhost"]),
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE, timeout=5)
+                stderr=subprocess.PIPE, timeout=3)
         except (OSError, subprocess.TimeoutExpired):
             return current
         if probe.returncode:
             return current
         atomic_json(marker, {"attempted_at": time.time()})
-        request(current, "/api/shutdown", {})
-        deadline = time.monotonic() + 10
+        # The server rechecks under its mutation lock and stops accepting new
+        # starts before agreeing. A client-side snapshot alone has a race.
+        # Old servers without this endpoint are left running; never fall back
+        # to an unconditional shutdown after an error or an unknown outcome.
+        try:
+            result = request(current, "/api/recover-session", {}, timeout=2)
+        except PortmanError:
+            return current
+        if result.get("stopping") is not True:
+            return current
+        deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             if not (home / "runtime.json").exists():
                 return None

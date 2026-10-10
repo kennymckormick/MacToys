@@ -25,6 +25,18 @@ def user_context_command(command):
     return list(command)
 
 
+def session_recovery_needed(mappings):
+    if sys.platform != "darwin" or not isinstance(mappings, list) or not mappings:
+        return False
+    # Unknown states/data must never authorize an automatic shutdown.
+    if any(not isinstance(m, dict) or m.get("status") not in ("stopped", "retrying") for m in mappings):
+        return False
+    error = "No user exists for uid {}".format(os.getuid())
+    return any(m.get("enabled") is True and m.get("mode") in ("ssh-local", "ssh-remote")
+               and m.get("status") == "retrying" and isinstance(m.get("error"), str)
+               and m["error"].strip() == error for m in mappings)
+
+
 def state_dir():
     return Path(os.environ.get("PORTMAN_HOME", "~/.local/state/portman")).expanduser().resolve()
 

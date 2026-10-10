@@ -36,9 +36,9 @@ jobs:
         run: bash scripts/check-localization.sh
       - name: Fresh install and bundled runtime selection
         run: bash scripts/check-release-setup.sh
-      - name: Portman TCP and API checks
+      - name: Portman TCP, SSH, and session recovery checks
         working-directory: Modules/Portman
-        run: PYTHONPATH=tests python3 -m unittest -v test_portman.SpecTests test_portman.LiveTests
+        run: python3 -m unittest discover -s tests -v
       - name: Check GUI JavaScript
         run: |
           node --check Modules/Portman/portman/static/app.js

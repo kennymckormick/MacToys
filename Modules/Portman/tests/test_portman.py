@@ -267,6 +267,27 @@ class LiveTests(unittest.TestCase):
             self.cli("stop", "echo")
             self.assertEqual(s.recv(1), b"")
 
+    def test_recovery_api_preserves_running_forward_and_open_connection(self):
+        from portman.client import request
+        port, _ = self.add()
+        runtime = self.runtime()
+        saved = (self.home / "mappings.json").read_bytes()
+        with socket.create_connection(("127.0.0.1", port), 3) as connection:
+            connection.settimeout(3)
+            connection.sendall(b"before ")
+            self.assertEqual(request(runtime, "/api/recover-session", {}, timeout=2), {"stopping": False})
+            connection.sendall(b"after")
+            connection.shutdown(socket.SHUT_WR)
+            received = bytearray()
+            while True:
+                data = connection.recv(65536)
+                if not data:
+                    break
+                received.extend(data)
+            self.assertEqual(received, b"before after")
+        self.assertEqual(self.runtime(), runtime)
+        self.assertEqual((self.home / "mappings.json").read_bytes(), saved)
+
 
 @unittest.skipUnless(Path("/usr/sbin/sshd").exists(), "OpenSSH server is unavailable")
 class RealSSHTests(LiveTests):
@@ -376,6 +397,38 @@ class RealSSHTests(LiveTests):
         self.launch_sshd()
         wait_for(lambda: reachable(port), 20)
         self.transfer(port)
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS user context recovery")
+    def test_user_lookup_failure_recovers_once_with_concurrent_clients(self):
+        # Fault only the first daemon's SSH environment. Its replacement uses
+        # the healthy client's environment and a real isolated SSH server.
+        wrapper = Path(self.tmp.name) / "bin/ssh"
+        command = wrapper.read_text()
+        wrapper.write_text(command.replace("#!/bin/sh\n", "#!/bin/sh\n"
+            'if [ "${{PORTMAN_TEST_BAD_CONTEXT:-}}" = "1" ]; then\n'
+            '  echo "No user exists for uid {}" >&2\n  exit 255\nfi\n'.format(os.getuid()), 1))
+        self.env["PORTMAN_TEST_BAD_CONTEXT"] = "1"
+        port = free_port()
+        code, failed = self.cli("add", "recover", "--listen", str(port),
+                                "--target", "127.0.0.1:" + str(self.target), "--via", "qa-alias", check=False)
+        self.assertEqual(code, 2)
+        self.assertEqual(failed["error"], "No user exists for uid {}".format(os.getuid()))
+        old_pid = self.runtime()["pid"]
+        saved = (self.home / "mappings.json").read_bytes()
+        del self.env["PORTMAN_TEST_BAD_CONTEXT"]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            runtimes = list(pool.map(lambda _: self.cli("daemon", "start"), range(5)))
+        wait_for(lambda: reachable(port), 15)
+        self.transfer(port, os.urandom(200001))
+        new_pid = self.runtime()["pid"]
+        self.assertNotEqual(old_pid, new_pid)
+        self.assertEqual({r["pid"] for r in runtimes} - {old_pid}, {new_pid})
+        healthy = self.cli("list")["mappings"][0]
+        self.assertEqual(healthy["status"], "running")
+        self.assertEqual(healthy["id"], failed["id"])
+        self.assertEqual(healthy["retries"], 0)
+        self.assertEqual((self.home / "mappings.json").read_bytes(), saved)
+        self.assertTrue((self.home / "recovery.json").exists())
 
 
 # Avoid rerunning inherited TCP cases with an unnecessary SSH fixture.
