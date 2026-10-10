@@ -17,6 +17,14 @@ def python_command(module, *args):
     return [sys.executable, "-I", "-B", str(Path(__file__).with_name("_entry.py")), module, *args]
 
 
+def user_context_command(command):
+    # A long-lived macOS helper must not retain its launching app's transient
+    # bootstrap namespace. asuser changes the context, not the UID or credentials.
+    if sys.platform == "darwin":
+        return ["/bin/launchctl", "asuser", str(os.getuid()), *command]
+    return list(command)
+
+
 def state_dir():
     return Path(os.environ.get("PORTMAN_HOME", "~/.local/state/portman")).expanduser().resolve()
 

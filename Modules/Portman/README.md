@@ -39,6 +39,7 @@ GUI 与 CLI 共用本机后台。关闭页面不停止转发；`portman daemon s
 - 默认只监听 loopback；反向监听受服务端 GatewayPorts 等设置约束，不修改服务端配置。
 - `running` 表示监听 / SSH 转发已建立，并不代表目标应用健康。`check --http-path /` 分别报告传输结果和 HTTP 状态。
 - 断线按 1、2、4、8、16、30 秒退避重连；停止的映射不会自行重连。
+- macOS 后台使用当前用户的系统服务环境启动。若旧后台出现 `No user exists for uid ...` 且没有正在运行或启动的转发，重新连接界面或运行 CLI 会尝试恢复后台，保留原有规则；最多每 5 分钟尝试一次。
 - 状态目录默认 `~/.local/state/portman`；配置原子保存。`runtime.json` 含管理 token，不应公开。管理 API 校验 token、Host、Origin，不允许跨域。
 - 每条映射最多两个 256 KiB 日志；后台诊断日志启动时按 1 MiB 轮换。
 - `--home PATH` 或 `PORTMAN_HOME` 指定隔离实例。没有自动添加登录启动项。

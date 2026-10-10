@@ -1,12 +1,14 @@
+import fcntl
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
-from .common import PortmanError, private_dir, read_json, python_command
+from .common import PortmanError, atomic_json, private_dir, read_json, python_command, user_context_command
 
 
 def request(runtime, path, data=None, timeout=35):
@@ -42,10 +44,67 @@ def running(home):
     return None
 
 
+def needs_session_recovery(runtime):
+    if sys.platform != "darwin":
+        return False
+    mappings = request(runtime, "/api/mappings", timeout=2).get("mappings", [])
+    # Never interrupt an established forward or one that is still starting.
+    if any(m.get("status") not in ("stopped", "retrying") for m in mappings):
+        return False
+    error = "No user exists for uid {}".format(os.getuid())
+    return any(m.get("enabled") and m.get("mode") in ("ssh-local", "ssh-remote")
+               and m.get("status") == "retrying" and m.get("error", "").strip() == error
+               for m in mappings)
+
+
+def recover_session(home, runtime):
+    try:
+        if not needs_session_recovery(runtime):
+            return runtime
+    except PortmanError:
+        return runtime
+    # Serialize repairs from concurrent CLI/GUI clients. The daemon's own lock
+    # separately prevents duplicate replacements from starting.
+    with (home / "recovery.lock").open("a+") as lock:
+        os.fchmod(lock.fileno(), 0o600)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        current = running(home)
+        if current != runtime or not needs_session_recovery(current):
+            return current
+        marker = home / "recovery.json"
+        previous = read_json(marker, {})
+        if time.time() - previous.get("attempted_at", 0) < 300:
+            return current
+        # -G with an empty config resolves the local account without making a
+        # connection or invoking user SSH config. Only a healthy client repairs.
+        try:
+            probe = subprocess.run(user_context_command([
+                "/usr/bin/ssh", "-G", "-F", os.devnull, "localhost"]),
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE, timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            return current
+        if probe.returncode:
+            return current
+        atomic_json(marker, {"attempted_at": time.time()})
+        request(current, "/api/shutdown", {})
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if not (home / "runtime.json").exists():
+                return None
+            replacement = running(home)
+            if replacement and replacement != runtime:
+                return replacement
+            time.sleep(0.1)
+        raise PortmanError("Portman session recovery is waiting for the old background service to stop; see daemon.log")
+
+
 def ensure(home):
     runtime = running(home)
     if runtime:
-        return runtime
+        runtime = recover_session(home, runtime)
+        if runtime:
+            return runtime
     private_dir(home)
     path = home / "daemon.log"
     if path.exists() and path.stat().st_size > 1048576:
@@ -54,7 +113,7 @@ def ensure(home):
     env = dict(os.environ, PORTMAN_HOME=str(home))
     source = str(Path(__file__).resolve().parent.parent)
     with path.open("ab") as log:
-        proc = subprocess.Popen(python_command("portman", "--home", str(home), "_serve"),
+        proc = subprocess.Popen(user_context_command(python_command("portman", "--home", str(home), "_serve")),
                                 stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                                 start_new_session=True, cwd=source, env=env)
     deadline = time.monotonic() + 8
