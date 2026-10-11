@@ -59,6 +59,7 @@ struct CloudSyncChecks {
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)
         let suite = "com.local.mactoys.sync-tests.\(UUID())"
         let defaults = UserDefaults(suiteName: suite)!
+        check(BackupPreferences(defaults: defaults).scrollEnabled, "Fresh backup keeps the default-enabled scroll preference")
         defer { defaults.removePersistentDomain(forName: suite); try? fm.removeItem(at: folder) }
         let db = try StatsDatabase(url: folder.appendingPathComponent("stats.sqlite"))
         let todos = TodoStore(url: folder.appendingPathComponent("todos.json"))

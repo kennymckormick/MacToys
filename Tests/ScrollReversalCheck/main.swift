@@ -88,7 +88,7 @@ let suite = "com.local.mactoys.scroll-tests.\(UUID().uuidString)"
 let defaults = UserDefaults(suiteName: suite)!
 defer { defaults.removePersistentDomain(forName: suite) }
 let store = ScrollReversalStore(defaults: defaults, allowEventTap: false)
-check(!store.enabled && store.reverseVertical && !store.reverseHorizontal, "首次使用默认关闭，默认仅垂直方向")
+check(store.enabled && store.reverseVertical && !store.reverseHorizontal, "首次使用默认开启，默认仅垂直方向")
 store.start(); store.enabled = true; store.reverseHorizontal = true; store.reverseVertical = false
 check(!store.running && store.issue != nil, "测试实例不安装全局滚轮监听")
 let restored = ScrollReversalStore(defaults: defaults, allowEventTap: false)

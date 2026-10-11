@@ -13,6 +13,7 @@ Drag MacToys to Applications. Python and Portman are included; no development to
 - Notes is pinned in the menu bar. Choose up to three more tabs from Todo, Goals, Stats, Colors, Scroll, and Awake in Settings → Quick Panel.
 - Set which tab opens each time you click the menu bar icon. Todo is the default.
 - Use English or Simplified Chinese, or follow the system language. Switch without restarting.
+- Automatically relaunch after exit, with protection against rapid restart loops. Turn off automatic restart in Settings to quit completely.
 
 ## Todo List
 
@@ -69,13 +70,13 @@ Drag MacToys to Applications. Python and Portman are included; no development to
 
 - Reverse vertical and horizontal mouse wheel scrolling independently.
 - Keep trackpad scrolling and momentum unchanged. Continuous devices, including Magic Mouse, retain their original direction.
-- Toggle from the menu bar; keep the setting when the window closes.
+- On by default for vertical scrolling. Toggle from the menu bar; your choice persists across restarts.
 
 ## Keep Awake
 
 - Prevent idle sleep until switched off, or for 15 minutes to 4 hours.
 - Optionally keep the display on while the Mac stays awake.
-- Toggle from the menu bar; a dot beside the tool icon indicates an active session. Sessions end when MacToys quits.
+- On by default. Toggle from the menu bar; a dot beside the tool icon indicates an active session. Restarts restore the switch and original timer deadline.
 
 [Build from source](docs/building.md) · [Usage notes (中文)](docs/usage.zh-CN.md)
 

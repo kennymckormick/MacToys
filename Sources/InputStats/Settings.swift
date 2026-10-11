@@ -15,9 +15,13 @@ final class AppSettings: ObservableObject {
     let quickPanel: QuickPanelSettings
     @Published var launchAtLogin = false
     @Published var loginError: String?
+    @Published private(set) var keepRunning: Bool
+    @Published private(set) var residentBusy = false
+    @Published private(set) var residentError: String?
     private let defaults: UserDefaults
     private init() {
         defaults = ProcessInfo.processInfo.environment["INPUTSTATS_TEST_HOME"] == nil ? .standard : UserDefaults(suiteName: "com.local.inputstats.tests")!
+        keepRunning = defaults.object(forKey: "resident.enabled") as? Bool ?? true
         use24Hour = defaults.object(forKey: "use24Hour") as? Bool ?? true
         weekDays = min(30, max(3, defaults.object(forKey: "weekDays") as? Int ?? 7))
         paused = defaults.bool(forKey: "paused")
@@ -46,6 +50,25 @@ final class AppSettings: ObservableObject {
         } catch {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             loginError = error.localizedDescription
+        }
+    }
+
+    func startResidence() {
+        if keepRunning { setKeepRunning(true) }
+    }
+
+    func setKeepRunning(_ enabled: Bool) {
+        guard ProcessInfo.processInfo.environment["INPUTSTATS_TEST_HOME"] == nil, !residentBusy else { return }
+        residentBusy = true
+        let service = ResidentService(app: Bundle.main.bundleURL.resolvingSymlinksInPath(), dataDirectory: Database.directory)
+        Task { @MainActor in
+            do {
+                try await Task.detached(priority: .utility) { try service.setEnabled(enabled) }.value
+                self.keepRunning = enabled; self.defaults.set(enabled, forKey: "resident.enabled")
+                self.residentError = nil
+                self.launchAtLogin = enabled || SMAppService.mainApp.status == .enabled
+            } catch { self.residentError = error.localizedDescription }
+            self.residentBusy = false
         }
     }
 }

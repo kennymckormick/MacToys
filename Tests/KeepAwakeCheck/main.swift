@@ -34,10 +34,12 @@ defer { defaults.removePersistentDomain(forName: suite) }
 let power = FakePower()
 var clock = Date().addingTimeInterval(3600)
 let store = KeepAwakeStore(defaults: defaults, now: { clock }, makeAssertion: power.create)
-check(!store.enabled && store.keepDisplayAwake && store.duration == .untilOff, "默认关闭，预选屏幕常亮和直到关闭")
+check(!store.enabled && store.keepDisplayAwake && store.duration == .untilOff, "启动前不获取资源，默认屏幕常亮和直到关闭")
 store.setEnabled(true)
 check(!store.enabled && power.assertions.isEmpty, "未启动的 Store 不获取系统资源")
-store.start(); store.start(); store.setEnabled(true)
+store.start()
+check(store.enabled, "首次启动默认开启防休眠")
+store.start(); store.setEnabled(true)
 check(store.enabled && power.active.count == 1 && power.active[0].display, "启用时只创建一个屏幕与系统防休眠断言")
 check(store.endsAt == nil && power.active[0].timeout == nil, "直到关闭不创建定时截止时间")
 store.setEnabled(true)
@@ -90,9 +92,15 @@ clock.addTimeInterval(3600); store.expireIfNeeded()
 check(!store.enabled && power.active.isEmpty, "到截止时刻自动释放断言")
 
 store.setKeepDisplayAwake(true); store.setDuration(.hours4); store.setEnabled(true)
-let restored = KeepAwakeStore(defaults: defaults, makeAssertion: power.create)
+let restored = KeepAwakeStore(defaults: defaults, now: { clock }, makeAssertion: power.create)
 check(!restored.enabled && restored.keepDisplayAwake && restored.duration == .hours4,
-      "重新创建实例只恢复偏好，不自动延续开启状态")
+      "重新创建实例先恢复偏好，启动后再获取资源")
+let persistedDeadline = store.endsAt
+store.stop(); clock.addTimeInterval(60); restored.start()
+check(restored.enabled && abs(restored.endsAt!.timeIntervalSince(persistedDeadline!)) < 0.001 && abs(power.active[0].timeout! - 14340) < 0.001,
+      "重新启动恢复开启状态与原截止时间，不重新计时")
+restored.setEnabled(false); restored.stop(); restored.start()
+check(!restored.enabled && power.active.isEmpty, "手动关闭后重启仍关闭")
 restored.stop(); store.stop()
 check(power.active.isEmpty && power.assertions.allSatisfy { $0.releases == 1 }, "停止释放全部资源，没有重复释放")
 store.setEnabled(true)
@@ -107,6 +115,20 @@ do {
     scoped.start(); scoped.setEnabled(true)
 }
 check(power.active.isEmpty, "Store 销毁时释放防休眠状态")
+
+defaults.set(true, forKey: "awake.enabled")
+defaults.set(clock.addingTimeInterval(-1).timeIntervalSince1970, forKey: "awake.endsAt")
+let expired = KeepAwakeStore(defaults: defaults, now: { clock }, makeAssertion: power.create)
+expired.start()
+check(!expired.enabled && !defaults.bool(forKey: "awake.enabled"), "退出期间已到期的会话不会复活")
+expired.stop()
+defaults.removeObject(forKey: "awake.endsAt"); defaults.set(true, forKey: "awake.enabled"); defaults.set(0, forKey: "awake.duration")
+let indefinite = KeepAwakeStore(defaults: defaults, now: { clock }, makeAssertion: power.create)
+indefinite.start(); indefinite.refreshDeadline()
+check(indefinite.enabled && power.active.count == 1 && indefinite.endsAt == nil, "无期限会话在唤醒后重建系统断言且不重复持有")
+indefinite.stop(); indefinite.start()
+check(indefinite.enabled && indefinite.endsAt == nil, "无期限会话在进程重启后恢复")
+indefinite.stop()
 
 // Native assertions are short-lived and process-owned. No sleep settings are changed.
 func properties(_ id: IOPMAssertionID) -> [String: Any]? {

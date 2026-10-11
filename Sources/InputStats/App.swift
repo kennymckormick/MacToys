@@ -78,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
             NSApp.terminate(nil); return
         }
         ownsLock = true
+        try? String(ProcessInfo.processInfo.processIdentifier).write(to: Database.directory.appendingPathComponent("app.pid"), atomically: true, encoding: .utf8)
         appDefaults.set(true, forKey: "setup.seen")
         do { try localBackup.recoverInterruptedRestore() }
         catch {
@@ -92,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
         InputMonitor.shared.start()
         scroll.start()
         awake.start()
-        if !isTest { cloud.startAutomaticSync() }
+        if !isTest { cloud.startAutomaticSync(); AppSettings.shared.startResidence() }
         for number in [SIGTERM, SIGINT] {
             signal(number, SIG_IGN)
             let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
@@ -400,6 +401,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSPopo
             scroll.stop()
             awake.stop()
             if !recoveryBlocked && (!isTest || ProcessInfo.processInfo.environment["INPUTSTATS_ENABLE_TEST_MONITOR"] == "1") { InputMonitor.shared.stop() }
+            try? FileManager.default.removeItem(at: Database.directory.appendingPathComponent("app.pid"))
             flock(lockFD, LOCK_UN); Darwin.close(lockFD)
         }
     }

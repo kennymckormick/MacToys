@@ -34,7 +34,13 @@ struct SettingsView: View {
                     ForEach(AppLanguage.allCases) { Text($0.label).tag($0) }
                 }
                 Toggle(L("登录时启动 MacToys"), isOn: Binding(get: { settings.launchAtLogin }, set: settings.setLaunchAtLogin))
+                    .disabled(settings.keepRunning)
                 if let error = settings.loginError { Text(error).foregroundStyle(.orange).font(.caption) }
+                Toggle(L("退出后自动重启"), isOn: Binding(get: { settings.keepRunning }, set: settings.setKeepRunning))
+                    .disabled(settings.residentBusy)
+                Text(L("常驻开启时，登录后自动启动，退出后会重新拉起。要彻底退出，请先关闭此项。"))
+                    .font(.caption).foregroundStyle(.secondary)
+                if let error = settings.residentError { Text(error).foregroundStyle(.orange).font(.caption) }
                 Picker(L("时间格式"), selection: $settings.use24Hour) {
                     Text(L("24 小时制")).tag(true); Text("AM / PM").tag(false)
                 }
@@ -64,7 +70,7 @@ struct SettingsView: View {
                 }
             }
             Section("MacToys") {
-                Text(L("待办清单、输入统计、端口转发、屏幕取色、滚轮反转与防止休眠。关闭窗口后继续运行；退出 MacToys 会停止统计、快捷键、滚轮反转和防止休眠，Portman 的连接继续由后台管理。"))
+                Text(L("关闭窗口后功能继续运行；常驻开启时，退出后自动恢复。Portman 转发由独立后台管理。"))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

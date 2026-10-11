@@ -48,7 +48,7 @@ final class ScrollReversalStore: ObservableObject {
         self.defaults = defaults
         self.allowEventTap = allowEventTap ?? !isTest
         self.accessAvailable = accessAvailable; self.conflictingApp = conflictingApp ?? Self.findConflict
-        enabled = defaults.bool(forKey: "scroll.enabled")
+        enabled = defaults.object(forKey: "scroll.enabled") as? Bool ?? true
         reverseVertical = defaults.object(forKey: "scroll.vertical") as? Bool ?? true
         reverseHorizontal = defaults.bool(forKey: "scroll.horizontal")
     }
@@ -64,6 +64,9 @@ final class ScrollReversalStore: ObservableObject {
         }
         workspaceTokens.append(nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.sleeping = false; self?.refresh()
+        })
+        workspaceTokens.append(nc.addObserver(forName: NSWorkspace.sessionDidBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.sleeping = false; self?.retry()
         })
         workspaceTokens.append(nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
             self?.sleeping = true; self?.stopTap()

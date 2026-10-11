@@ -59,6 +59,7 @@ swift run -c release --scratch-path .build-mactoys SelfCheck
 bash scripts/check-color-picker.sh
 bash scripts/check-scroll-reversal.sh
 bash scripts/check-keep-awake.sh
+bash scripts/check-residence.sh
 bash scripts/check-todos.sh
 bash scripts/check-goals.sh
 bash scripts/check-notes.sh

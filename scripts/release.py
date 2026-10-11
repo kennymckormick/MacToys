@@ -121,6 +121,7 @@ def build(arch, output):
     triple = arch + "-apple-macosx14.0"
     print("Building MacToys", version, arch, flush=True)
     run("swift", "build", "-c", "release", "--product", "InputStats", "--triple", triple, "--scratch-path", scratch, cwd=ROOT)
+    run("swift", "build", "-c", "release", "--product", "MacToysWatchdog", "--triple", triple, "--scratch-path", scratch, cwd=ROOT)
     bin_path = Path(run("swift", "build", "-c", "release", "--triple", triple, "--scratch-path", scratch,
                         "--show-bin-path", cwd=ROOT, capture_output=True, text=True).stdout.strip())
     with tempfile.TemporaryDirectory(prefix=".mactoys-release-", dir=output) as temp:
@@ -132,6 +133,7 @@ def build(arch, output):
         (contents / "MacOS").mkdir(parents=True)
         resources.mkdir()
         shutil.copy2(bin_path / "InputStats", contents / "MacOS/InputStats")
+        shutil.copy2(bin_path / "MacToysWatchdog", contents / "MacOS/MacToysWatchdog")
         shutil.copy2(ROOT / "Resources/Info.plist", contents / "Info.plist")
         for name in ("NotesEditor", "Python-Licenses"):
             shutil.copytree(ROOT / "Resources" / name, resources / name)

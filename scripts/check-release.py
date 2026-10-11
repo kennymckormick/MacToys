@@ -63,6 +63,7 @@ def exercise(app, temp):
     resources = app / "Contents/Resources"
     python = resources / "Python/bin/python3"
     cli = app / "Contents/MacOS/portman"
+    assert (app / "Contents/MacOS/MacToysWatchdog").is_file(), "Missing residence helper"
     poison = temp / "unusable-external-tools"
     poison.mkdir()
     for name in ("python", "python3", "portman", "node", "pip"):

@@ -54,7 +54,7 @@ struct BackupPreferences: Codable, Equatable {
         colorShowAfterPicking = d.object(forKey: "color.showAfterPicking") as? Bool ?? true
         colorShortcutEnabled = d.object(forKey: "color.shortcutEnabled") as? Bool ?? true
         colorShortcut = d.data(forKey: "color.shortcut").flatMap { try? JSONDecoder().decode(ColorShortcut.self, from: $0) } ?? .standard
-        scrollEnabled = d.bool(forKey: "scroll.enabled")
+        scrollEnabled = d.object(forKey: "scroll.enabled") as? Bool ?? true
         scrollVertical = d.object(forKey: "scroll.vertical") as? Bool ?? true
         scrollHorizontal = d.bool(forKey: "scroll.horizontal")
         awakeDisplay = d.object(forKey: "awake.display") as? Bool ?? true

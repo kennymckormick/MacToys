@@ -15,6 +15,7 @@ let package = Package(
             path: "Sources/InputStats",
             linkerSettings: [.linkedLibrary("sqlite3"), .linkedFramework("Carbon")]
         ),
+        .executableTarget(name: "MacToysWatchdog", path: "Sources/MacToysWatchdog"),
         // 自检（无需 Xcode/XCTest）：swift run SelfCheck
         .executableTarget(
             name: "SelfCheck",

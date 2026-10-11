@@ -1,5 +1,6 @@
 """Replace a verified local build, preserving the existing app identity and rollback zip."""
 import datetime
+import atexit
 import os
 from pathlib import Path
 import plistlib
@@ -32,6 +33,19 @@ if installed:
     alias = destination.with_name('MacToys.app')
     if alias.exists() or alias.is_symlink():
         assert alias.is_symlink() and alias.resolve() == destination.resolve(), 'MacToys.app is already used by another app'
+    # Stop only our helper before replacing the app. Its LaunchAgent abandons
+    # the app's process group, allowing the existing save-on-quit path to run.
+    agent = Path.home() / 'Library/LaunchAgents/com.local.mactoys.watchdog.plist'
+    service = 'gui/{}/com.local.mactoys.watchdog'.format(os.getuid())
+    loaded = subprocess.run(['launchctl', 'print', service], capture_output=True).returncode == 0
+    if loaded:
+        config = plistlib.loads(agent.read_bytes())
+        assert config['ProgramArguments'][0] == str(destination / 'Contents/MacOS/MacToysWatchdog'), 'Unrelated watchdog job'
+        assert config.get('AbandonProcessGroup') is True, 'Watchdog must leave the app alive for saving'
+        subprocess.run(['launchctl', 'bootout', service], check=True, capture_output=True, timeout=10)
+        def resume_watchdog():
+            subprocess.run(['launchctl', 'bootstrap', 'gui/{}'.format(os.getuid()), str(agent)], timeout=10)
+        atexit.register(resume_watchdog)
     # Ask the owned GUI to quit through the standard macOS application lifecycle.
     # Launch Services apps can defer SIGTERM, so prefer NSRunningApplication.terminate().
     subprocess.run([str(source.resolve()/'Contents/MacOS/InputStats'), '--quit-running', str(destination.resolve())], check=True, timeout=10)

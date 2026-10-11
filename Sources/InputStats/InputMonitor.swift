@@ -4,15 +4,16 @@ import ApplicationServices
 import Carbon
 import InputStatsCore
 
-/// Event tap callbacks only enqueue data. AX and persistence run on a serialized utility queue.
+/// Callbacks and AX observer ownership stay on main. Text reads and persistence
+/// run on a serialized utility queue so slow apps do not block input callbacks.
 final class InputMonitor {
     static let shared = InputMonitor()
     private let queue = DispatchQueue(label: "mactoys.input", qos: .utility)
     private var tap: CFMachPort?
     private var tapSource: CFRunLoopSource?
-    private var observer: AXObserver?
-    private var observedElement: AXUIElement?
-    private var observerApp: AXUIElement?
+    private let focusObserver = AXFocusObserver()
+    private var observerGeneration: UInt64 = 0
+    private var frontmostPID: pid_t?
     private var boundPID: pid_t?
     private var workspaceTokens: [NSObjectProtocol] = []
     private var settingsToken: NSObjectProtocol?
@@ -69,14 +70,18 @@ final class InputMonitor {
         }
         if workspaceTokens.isEmpty {
             let nc = NSWorkspace.shared.notificationCenter
-            for name in [NSWorkspace.didActivateApplicationNotification, NSWorkspace.didWakeNotification] {
+            for name in [NSWorkspace.didActivateApplicationNotification, NSWorkspace.didWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
                 workspaceTokens.append(nc.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                    self?.bindFrontmost(force: name == NSWorkspace.didWakeNotification)
+                    self?.bindFrontmost(force: name != NSWorkspace.didActivateApplicationNotification)
                 })
             }
-            workspaceTokens.append(nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-                self?.queue.async { self?.flush(); self?.resetFocus() }
-            })
+            for name in [NSWorkspace.willSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
+                workspaceTokens.append(nc.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                    guard let self else { return }
+                    self.frontmostPID = nil; self.focusObserver.stop()
+                    self.queue.async { self.boundPID = nil; self.flush(); self.resetFocus() }
+                })
+            }
             settingsToken = NotificationCenter.default.addObserver(forName: .monitorSettingsDidChange, object: nil, queue: .main) { [weak self] _ in self?.updateSettings() }
         }
         let running = trusted && tap != nil
@@ -181,58 +186,38 @@ final class InputMonitor {
     }
 
     private func bindFrontmost(force: Bool = false) {
+        precondition(Thread.isMainThread)
         guard tap != nil else { return }
         let app = NSWorkspace.shared.frontmostApplication
-        let pid = app?.processIdentifier
+        let pid = app?.bundleIdentifier == "com.apple.loginwindow" ? nil : app?.processIdentifier
         let isTerminal = ["com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "com.mitchellh.ghostty", "net.kovidgoyal.kitty", "org.alacritty"].contains(app?.bundleIdentifier ?? "")
+        if !force && frontmostPID == pid {
+            queue.async { self.scheduleSample(after: 0.05) }; return
+        }
+        frontmostPID = pid
+        let generation = focusObserver.bind(pid: pid) { [weak self] focus, generation in
+            guard let self else { return }
+            self.queue.async {
+                guard self.observerGeneration == generation else { return }
+                if focus { self.scheduleSample(after: 0.02) }
+                else {
+                    let active = self.now - self.lastInput < 3 || self.isVoice
+                    self.scheduleSample(after: active ? 0.1 : 0.4)
+                }
+            }
+        }
         queue.async {
-            if !force && self.boundPID == pid { self.scheduleSample(after: 0.05); return }
-            self.boundPID = pid
-            self.removeObserver()
+            self.boundPID = pid; self.observerGeneration = generation
             self.terminal = isTerminal
             self.resetFocus()
             AXText.configure()
-            if let pid {
-                var created: AXObserver?
-                if AXObserverCreate(pid, { _, _, notification, refcon in
-                    guard let refcon else { return }
-                    let monitor = Unmanaged<InputMonitor>.fromOpaque(refcon).takeUnretainedValue()
-                    let focus = (notification as String) == kAXFocusedUIElementChangedNotification
-                    monitor.queue.async {
-                        if focus { monitor.scheduleSample(after: 0.02) }
-                        else {
-                            // Rebase unsolicited document changes too, so the next key cannot count an entire loaded document.
-                            let active = monitor.now - monitor.lastInput < 3 || monitor.isVoice
-                            monitor.scheduleSample(after: active ? 0.1 : 0.4)
-                        }
-                    }
-                }, &created) == .success, let created {
-                    self.observer = created
-                    let app = AXUIElementCreateApplication(pid)
-                    self.observerApp = app
-                    AXObserverAddNotification(created, app, kAXFocusedUIElementChangedNotification as CFString,
-                                              Unmanaged.passUnretained(self).toOpaque())
-                    CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(created), .commonModes)
-                }
-            }
             self.scheduleSample(after: 0.05)
         }
     }
 
     private func observe(_ element: AXUIElement?) {
-        guard let observer else { return }
-        if let previous = observedElement { AXObserverRemoveNotification(observer, previous, kAXValueChangedNotification as CFString) }
-        observedElement = element
-        if let element {
-            AXObserverAddNotification(observer, element, kAXValueChangedNotification as CFString,
-                                      Unmanaged.passUnretained(self).toOpaque())
-        }
-    }
-    private func removeObserver() {
-        if let observer {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
-        }
-        observer = nil; observerApp = nil; observedElement = nil
+        let generation = observerGeneration
+        DispatchQueue.main.async { self.focusObserver.observe(element, generation: generation) }
     }
     private func resetFocus() {
         lastElement = nil; snapshot = AXText.Snapshot(blocked: true)
@@ -389,6 +374,7 @@ final class InputMonitor {
         }
     }
     func stop(savePending: Bool = true) {
+        focusObserver.stop(); frontmostPID = nil
         if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
         if let tapSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), tapSource, .commonModes) }
         tap = nil; tapSource = nil
@@ -396,7 +382,6 @@ final class InputMonitor {
             if savePending { self.sample() }
             stopping = true
             sampleWork?.cancel(); voiceWork?.cancel(); flushWork?.cancel()
-            removeObserver()
             if savePending { flush() }
             else { pending.removeAll() }
             resetFocus()

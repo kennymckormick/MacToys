@@ -25,6 +25,7 @@ final class KeepAwakeStore: ObservableObject {
     private let defaults: UserDefaults
     private let now: () -> Date
     private let makeAssertion: (Bool, TimeInterval?) throws -> AwakeAssertion
+    private let canRestoreSession: Bool
     private var assertion: AwakeAssertion?
     private var expiryTimer: Timer?
     private var wakeToken: NSObjectProtocol?
@@ -36,13 +37,14 @@ final class KeepAwakeStore: ObservableObject {
         let isTest = ProcessInfo.processInfo.environment["INPUTSTATS_TEST_HOME"] != nil
         let defaults = defaults ?? (isTest ? UserDefaults(suiteName: "com.local.inputstats.tests")! : .standard)
         self.defaults = defaults; self.now = now
+        canRestoreSession = !isTest || makeAssertion != nil
         self.makeAssertion = makeAssertion ?? { display, timeout in
             guard !isTest else { throw AwakeError.testMode }
             return try SystemAwakeAssertion(keepDisplayAwake: display, timeout: timeout)
         }
         keepDisplayAwake = defaults.object(forKey: "awake.display") as? Bool ?? true
         duration = AwakeDuration(rawValue: defaults.integer(forKey: "awake.duration")) ?? .untilOff
-        // Only preferences persist. A fresh process never silently starts a session.
+        // Restore only when start() acquires ownership of system resources.
     }
 
     func start() {
@@ -52,6 +54,13 @@ final class KeepAwakeStore: ObservableObject {
             object: nil, queue: .main) { [weak self] _ in self?.refreshDeadline() }
         clockToken = NotificationCenter.default.addObserver(forName: .NSSystemClockDidChange,
             object: nil, queue: .main) { [weak self] _ in self?.refreshDeadline() }
+        guard canRestoreSession, defaults.object(forKey: "awake.enabled") as? Bool ?? true else { return }
+        if let timestamp = defaults.object(forKey: "awake.endsAt") as? Double {
+            guard timestamp.isFinite else { endSession(); return }
+            _ = replaceAssertion(display: keepDisplayAwake, deadline: Date(timeIntervalSince1970: timestamp))
+        } else {
+            _ = replaceAssertion(display: keepDisplayAwake, deadline: duration.seconds.map { now().addingTimeInterval($0) })
+        }
     }
 
     func setEnabled(_ value: Bool) {
@@ -90,6 +99,9 @@ final class KeepAwakeStore: ObservableObject {
             // Acquire first so failed changes leave the previous session intact.
             assertion?.release(); assertion = replacement
             endsAt = deadline; issue = nil; enabled = true
+            defaults.set(true, forKey: "awake.enabled")
+            if let deadline { defaults.set(deadline.timeIntervalSince1970, forKey: "awake.endsAt") }
+            else { defaults.removeObject(forKey: "awake.endsAt") }
             scheduleExpiry()
             return true
         } catch {
@@ -116,24 +128,28 @@ final class KeepAwakeStore: ObservableObject {
     }
 
     func refreshDeadline() {
-        guard started, enabled, let endsAt else { return }
+        guard started, enabled else { return }
         expireIfNeeded()
         guard enabled else { return }
         // Reconcile powerd's relative timeout after sleep or a wall-clock change.
         if !replaceAssertion(display: keepDisplayAwake, deadline: endsAt) {
             let error = issue
-            endSession(); issue = error
+            endSession(persist: false); issue = error
         }
     }
 
-    private func endSession() {
+    private func endSession(persist: Bool = true) {
         expiryTimer?.invalidate(); expiryTimer = nil
         assertion?.release(); assertion = nil
         endsAt = nil; issue = nil; enabled = false
+        if persist {
+            defaults.set(false, forKey: "awake.enabled")
+            defaults.removeObject(forKey: "awake.endsAt")
+        }
     }
 
     func stop() {
-        started = false; endSession()
+        started = false; endSession(persist: false)
         if let wakeToken { NSWorkspace.shared.notificationCenter.removeObserver(wakeToken) }
         if let clockToken { NotificationCenter.default.removeObserver(clockToken) }
         wakeToken = nil; clockToken = nil

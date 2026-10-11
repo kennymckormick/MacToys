@@ -22,11 +22,13 @@ if [ -z "$SIGN_ID" ]; then
     fi
 fi
 swift build -c release --scratch-path .build-mactoys
+BIN_PATH="$(swift build -c release --scratch-path .build-mactoys --show-bin-path)"
 STAGE=$(mktemp -d "$PWD/.package.XXXXXX")
 trap 'rm -rf "$STAGE"' EXIT
 APP="$STAGE/InputStats.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp .build-mactoys/release/InputStats "$APP/Contents/MacOS/InputStats"
+cp "$BIN_PATH/InputStats" "$APP/Contents/MacOS/InputStats"
+cp "$BIN_PATH/MacToysWatchdog" "$APP/Contents/MacOS/MacToysWatchdog"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp -R Resources/NotesEditor "$APP/Contents/Resources/NotesEditor"
 swift scripts/make-icon.swift "$STAGE/AppIcon.iconset"
@@ -38,6 +40,7 @@ fi
 mkdir -p "$APP/Contents/Resources/Portman/portman"
 cp "$PORTMAN_SOURCE"/portman/*.py "$APP/Contents/Resources/Portman/portman/"
 cp -R "$PORTMAN_SOURCE/portman/static" "$APP/Contents/Resources/Portman/portman/"
+codesign --force --sign "$SIGN_ID" --timestamp=none "$APP/Contents/MacOS/MacToysWatchdog"
 codesign --force --sign "$SIGN_ID" --timestamp=none "$APP"
 codesign --verify --deep --strict "$APP"
 # Packaging replacement is restricted to this project's generated app.

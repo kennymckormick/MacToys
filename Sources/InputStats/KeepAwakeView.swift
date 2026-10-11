@@ -46,7 +46,7 @@ struct KeepAwakeView: View {
                             Text(L("将在 %@ 自动关闭", endsAt.formatted(.dateTime.hour().minute().locale(language.locale))))
                                 .font(.caption).foregroundStyle(.secondary)
                         } else {
-                            Text(L("直到手动关闭或退出 MacToys")).font(.caption).foregroundStyle(.secondary)
+                            Text(L("直到手动关闭，重启后恢复")).font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -55,7 +55,7 @@ struct KeepAwakeView: View {
                 Text(L("更改持续时间会重新计时。关闭窗口后继续生效；菜单栏右键可快速开关。"))
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Text(L("用于防止闲置休眠。手动睡眠、合盖与锁屏仍按 macOS 的设置处理。退出后结束，下次启动保持关闭。"))
+            Text(L("用于防止闲置休眠。手动睡眠、合盖与锁屏仍按 macOS 的设置处理。默认开启；重启后恢复开关和原截止时间。"))
                 .font(.caption).foregroundStyle(.secondary)
         }.padding(compact ? 14 : 24)
     }

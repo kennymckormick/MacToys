@@ -15,13 +15,15 @@ jobs:
       - name: Build application
         run: SIGNING_IDENTITY=- ./build.sh
       - name: Core and storage checks
-        run: .build-mactoys/release/SelfCheck
+        run: swift run -c release --scratch-path .build-mactoys SelfCheck
       - name: Color picker checks
         run: bash scripts/check-color-picker.sh
       - name: Scroll reversal checks
         run: bash scripts/check-scroll-reversal.sh
       - name: Keep awake checks
         run: bash scripts/check-keep-awake.sh
+      - name: App residence and isolated relaunch checks
+        run: bash scripts/check-residence.sh
       - name: Todo and Quick Panel checks
         run: bash scripts/check-todos.sh
       - name: Long-term goal checks

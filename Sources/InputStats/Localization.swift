@@ -53,6 +53,11 @@ final class Localization: ObservableObject {
     // Chinese keys keep the original interface wording and are the Chinese fallback.
     // English entries are checked for missing keys and matching format placeholders.
     static let english: [String: String] = [
+        "退出后自动重启": "Restart automatically after exit",
+        "直到手动关闭，重启后恢复": "Until turned off; resumes after relaunch",
+        "用于防止闲置休眠。手动睡眠、合盖与锁屏仍按 macOS 的设置处理。默认开启；重启后恢复开关和原截止时间。": "Prevents idle sleep. Manual sleep, lid close, and screen locking follow macOS settings. On by default; relaunching restores the switch and original deadline.",
+        "关闭窗口后功能继续运行；常驻开启时，退出后自动恢复。Portman 转发由独立后台管理。": "Tools stay active with the window closed. When automatic restart is enabled, they resume after relaunch. Portman manages its connections separately.",
+        "常驻开启时，登录后自动启动，退出后会重新拉起。要彻底退出，请先关闭此项。": "Starts at login and relaunches after exit. Turn this off before quitting completely.",
         "开始使用": "Getting started",
         "先将 MacToys 拖入「应用程序」，从那里打开，再授予权限。": "Move MacToys to Applications and open it from there before granting permissions.",
         "打开应用程序文件夹": "Open Applications",
