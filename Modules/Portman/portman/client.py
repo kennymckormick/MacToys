@@ -1,4 +1,5 @@
 import fcntl
+from http.client import HTTPException
 import json
 import os
 import subprocess
@@ -9,6 +10,10 @@ from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
 from .common import PortmanError, atomic_json, private_dir, read_json, python_command, user_context_command, session_recovery_needed
+
+
+class DaemonUnavailable(PortmanError):
+    pass
 
 
 def request(runtime, path, data=None, timeout=35):
@@ -28,8 +33,27 @@ def request(runtime, path, data=None, timeout=35):
         except ValueError:
             message = str(e)
         raise PortmanError(message) from e
-    except (URLError, OSError, ValueError) as e:
+    except (URLError, OSError, HTTPException) as e:
+        raise DaemonUnavailable("Cannot reach Portman daemon: " + str(e)) from e
+    except ValueError as e:
         raise PortmanError("Cannot reach Portman daemon: " + str(e)) from e
+
+
+def read_current(home, runtime, path):
+    """Retry a read once if another client replaced the daemon during recovery."""
+    try:
+        return runtime, request(runtime, path)
+    except DaemonUnavailable:
+        # Recovery deliberately does not block concurrent clients. Their first
+        # read can therefore race the old daemon's exit. Wait only for a healthy
+        # replacement; never restart a service or replay a mutation here.
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline:
+            replacement = running(home)
+            if replacement and replacement != runtime:
+                return replacement, request(replacement, path)
+            time.sleep(0.1)
+        raise
 
 
 def running(home):

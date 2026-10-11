@@ -1,17 +1,21 @@
 import asyncio
 import copy
 import fcntl
+from http.client import RemoteDisconnected
+import io
 import json
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from portman import client
+from portman import cli
 from portman.common import PortmanError, user_context_command, session_recovery_needed
 from portman.manager import Manager
 
@@ -199,6 +203,55 @@ class SessionRecoveryTests(unittest.TestCase):
     def test_macos_launch_keeps_same_user_and_arguments(self):
         self.assertEqual(user_context_command(["/path with spaces/python", "--home", "a b"]),
                          ["/bin/launchctl", "asuser", str(os.getuid()), "/path with spaces/python", "--home", "a b"])
+
+
+class ConcurrentReadTests(unittest.TestCase):
+    def setUp(self):
+        self.home = Path("/unused-test-state")
+        self.old = {"pid": 12345, "port": 45678, "token": "old-test-token"}
+        self.new = {"pid": 12346, "port": 45679, "token": "new-test-token"}
+
+    def test_read_follows_replacement_after_connection_reset(self):
+        result = {"ok": True, "pid": self.new["pid"]}
+        with patch.object(client, "request", side_effect=[client.DaemonUnavailable("reset"), result]) as request, \
+             patch.object(client, "running", side_effect=[self.old, None, self.new]), \
+             patch.object(client.time, "sleep"):
+            self.assertEqual(client.read_current(self.home, self.old, "/api/health"), (self.new, result))
+        self.assertEqual(request.call_args_list, [call(self.old, "/api/health"), call(self.new, "/api/health")])
+
+    def test_disconnected_http_response_is_retryable(self):
+        for error in (ConnectionResetError("reset"), RemoteDisconnected("daemon exited")):
+            with self.subTest(error=error), patch.object(client, "build_opener") as opener:
+                opener.return_value.open.side_effect = error
+                with self.assertRaises(client.DaemonUnavailable):
+                    client.request(self.old, "/api/health")
+
+    def test_application_error_is_not_retried(self):
+        with patch.object(client, "request", side_effect=PortmanError("Unknown mapping")) as request, \
+             patch.object(client, "running") as running:
+            with self.assertRaisesRegex(PortmanError, "Unknown mapping"):
+                client.read_current(self.home, self.old, "/api/logs?name=missing")
+        request.assert_called_once()
+        running.assert_not_called()
+
+    def test_missing_replacement_has_a_bounded_wait_and_preserves_error(self):
+        error = client.DaemonUnavailable("original connection reset")
+        with patch.object(client, "request", side_effect=error) as request, \
+             patch.object(client, "running", return_value=self.old), \
+             patch.object(client.time, "monotonic", side_effect=[0, 0, 9]), \
+             patch.object(client.time, "sleep"):
+            with self.assertRaises(client.DaemonUnavailable) as raised:
+                client.read_current(self.home, self.old, "/api/health")
+        self.assertIs(raised.exception, error)
+        request.assert_called_once()
+
+    def test_mutation_is_never_replayed_after_connection_reset(self):
+        with patch.object(cli, "ensure", return_value=self.old), \
+             patch.object(cli, "request", side_effect=client.DaemonUnavailable("reset")) as request, \
+             patch.object(cli, "read_current") as read, redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(["--home", str(self.home), "--json", "restart", "test-only"]), 1)
+        request.assert_called_once_with(self.old, "/api/restart", {"name": "test-only"})
+        read.assert_not_called()
 
 
 class RecoveryAdmissionTests(unittest.IsolatedAsyncioTestCase):

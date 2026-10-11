@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from . import __version__
-from .client import ensure, request, running
+from .client import ensure, read_current, request, running
 from .common import PortmanError, state_dir
 
 
@@ -123,16 +123,17 @@ def main(argv=None):
             runtime = ensure(home)
             command = args.command
             if command in ("list", "ls"):
-                result = request(runtime, "/api/mappings")
+                _, result = read_current(home, runtime, "/api/mappings")
             elif command == "hosts":
-                result = request(runtime, "/api/aliases")
+                _, result = read_current(home, runtime, "/api/aliases")
             elif command == "gui":
+                runtime, _ = read_current(home, runtime, "/api/health")
                 url = "http://127.0.0.1:{}/#token={}".format(runtime["port"], runtime["token"])
                 if not args.no_open:
                     webbrowser.open(url)
                 result = {"url": url}
             elif command == "daemon":
-                result = request(runtime, "/api/health")
+                _, result = read_current(home, runtime, "/api/health")
             elif command in ("add", "edit"):
                 spec = {key: getattr(args, key) for key in ("mode", "listen", "target", "via", "ssh_port") if getattr(args, key) is not None}
                 if command == "add":
@@ -146,7 +147,7 @@ def main(argv=None):
                     payload = {"name": args.name, "spec": spec}
                 result = request(runtime, "/api/" + command, payload)
             elif command == "logs":
-                result = request(runtime, "/api/logs?" + urlencode({"name": args.name}))
+                _, result = read_current(home, runtime, "/api/logs?" + urlencode({"name": args.name}))
             else:
                 payload = {"name": args.name}
                 if command == "check" and args.http_path is not None:
